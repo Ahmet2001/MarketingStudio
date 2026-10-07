@@ -1,0 +1,16 @@
+**/.env
+**/.git
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/outputs
+backend/runtime
+backend/tests/.runtime
+frontend/node_modules
+frontend/dist
+frontend/*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
+Storyteller/gameplay/*.mp4
+Storyteller/gameplay/*-parts
+Storyteller/shutil

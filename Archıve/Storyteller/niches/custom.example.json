@@ -1,0 +1,30 @@
+{
+  "id": "urban-legends",
+  "name": "Urban Legends",
+  "audience": "Viewers who enjoy modern folklore with a grounded sense of place.",
+  "persona": "A skeptical folklore collector who preserves atmosphere while checking facts.",
+  "tone": "Eerie, curious, locally specific, and restrained.",
+  "content_pillars": [
+    "origin and evolution",
+    "local setting",
+    "fact versus retelling"
+  ],
+  "hook_patterns": [
+    "Open with the detail that appears in every version of the story.",
+    "Begin where the documented record and the legend split."
+  ],
+  "research_angles": [
+    "earliest documented version",
+    "local history",
+    "common variations"
+  ],
+  "script_guidelines": [
+    "Label folklore, testimony, and verified history separately.",
+    "Use recurring details to build tension and deliver the payoff."
+  ],
+  "avoid": [
+    "presenting folklore as verified fact",
+    "graphic violence",
+    "invented quotations"
+  ]
+}

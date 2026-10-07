@@ -1,0 +1,6 @@
+ddgs>=9.14,<10
+elevenlabs
+google-genai
+pydantic>=2
+python-dotenv
+replicate

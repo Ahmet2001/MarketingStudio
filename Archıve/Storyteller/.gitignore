@@ -1,0 +1,9 @@
+.env
+.venv/
+__pycache__/
+*.py[cod]
+outputs/
+generated_image.webp
+narration.mp3
+poster_with_text.png
+shutil

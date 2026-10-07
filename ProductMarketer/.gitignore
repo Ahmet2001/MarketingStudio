@@ -1,0 +1,12 @@
+node_modules
+dist
+storage/*.sqlite
+storage/*.sqlite-shm
+storage/*.sqlite-wal
+storage/uploads/*
+storage/generated/*
+storage/credentials.key
+!storage/uploads/.gitkeep
+!storage/generated/.gitkeep
+.env
+.env.local

@@ -1,0 +1,25 @@
+# secrets
+.env
+.env.local
+!.env.example
+
+# dependencies / build
+node_modules/
+.venv/
+venv/
+dist/
+__pycache__/
+*.pyc
+*.tsbuildinfo
+
+# runtime data
+ProductMarketer/storage/
+*.sqlite
+*.sqlite-*
+
+# generated / large media
+outputs/
+gameplay/
+*.mp4
+*.wav
+*.mp3

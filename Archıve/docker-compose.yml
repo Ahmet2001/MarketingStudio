@@ -1,0 +1,67 @@
+services:
+  redis:
+    image: redis:7.4-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    working_dir: /workspace/backend
+    env_file:
+      - backend/.env
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      STORYFORGE_PYTHON: python
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/workspace
+      - storyforge-runtime:/workspace/backend/runtime
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: .
+    command: celery -A app.celery_app.celery_app worker --loglevel=INFO --concurrency=1
+    working_dir: /workspace/backend
+    env_file:
+      - backend/.env
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      STORYFORGE_PYTHON: python
+    volumes:
+      - .:/workspace
+      - storyforge-runtime:/workspace/backend/runtime
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  scheduler:
+    build: .
+    command: celery -A app.celery_app.celery_app beat --loglevel=INFO --schedule=/workspace/backend/runtime/celerybeat-schedule
+    working_dir: /workspace/backend
+    env_file:
+      - backend/.env
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    volumes:
+      - .:/workspace
+      - storyforge-runtime:/workspace/backend/runtime
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  redis-data:
+  storyforge-runtime:
