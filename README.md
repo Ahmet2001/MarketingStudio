@@ -1,4 +1,31 @@
+<div align="center">
+
 # MarketingStudio
+
+**Ad creatives, story videos and documentary explainers in one toolkit.**
+
+![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)
+![Express](https://img.shields.io/badge/Express-000000?style=for-the-badge&logo=express&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white)
+
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)
+![Celery](https://img.shields.io/badge/Celery-37814A?style=for-the-badge&logo=celery&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![FFmpeg](https://img.shields.io/badge/FFmpeg-007808?style=for-the-badge&logo=ffmpeg&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white)
+
+[![Stars](https://img.shields.io/github/stars/Ahmet2001/MarketingStudio?style=flat-square&logo=github)](https://github.com/Ahmet2001/MarketingStudio/stargazers)
+[![Issues](https://img.shields.io/github/issues/Ahmet2001/MarketingStudio?style=flat-square)](https://github.com/Ahmet2001/MarketingStudio/issues)
+[![Last commit](https://img.shields.io/github/last-commit/Ahmet2001/MarketingStudio?style=flat-square)](https://github.com/Ahmet2001/MarketingStudio/commits/main)
+![Repo size](https://img.shields.io/github/repo-size/Ahmet2001/MarketingStudio?style=flat-square)
+
+[What is inside](#what-is-inside) · [Getting started](#getting-started) · [Help](#help) · [Contributing](#contributing)
+
+</div>
 
 MarketingStudio is a collection of tools for producing marketing content in one place: product ad creatives, narrated short-form story videos, documentary-style explainers, and the connectors needed to research and distribute that content on social platforms.
 
