@@ -23,66 +23,179 @@
 [![Last commit](https://img.shields.io/github/last-commit/Ahmet2001/MarketingStudio?style=flat-square)](https://github.com/Ahmet2001/MarketingStudio/commits/main)
 ![Repo size](https://img.shields.io/github/repo-size/Ahmet2001/MarketingStudio?style=flat-square)
 
-[What is inside](#what-is-inside) · [Getting started](#getting-started) · [Help](#help) · [Contributing](#contributing)
+[The four apps](#the-four-applications-at-a-glance) · [How they fit together](#how-the-pieces-fit-together) · [Setup](#setup-requirements) · [Roadmap](#roadmap) · [Contributing](#contributing)
 
 </div>
 
-MarketingStudio is a collection of tools for producing marketing content in one place: product ad creatives, narrated short-form story videos, documentary-style explainers, and the connectors needed to research and distribute that content on social platforms.
+MarketingStudio is a monorepo of four marketing tools that were built separately and now live side by side. Each one solves a different part of the same problem: **making marketing content and getting it in front of people.**
 
-## Why this project
+> **Read this first:** these are not one single app. They are independent applications with a shared folder layout. Only some of them talk to each other. The [How the pieces fit together](#how-the-pieces-fit-together) section shows exactly which.
 
-Marketing content usually needs several separate tools: an ad designer, a video generator, an image model, and scripts for each social platform. MarketingStudio keeps them in one repository with a shared layout, so each generator can be used on its own or wired into a common studio and scheduler.
+## The four applications at a glance
+
+| # | Application | One-line purpose | You give it | You get | Status |
+|---|---|---|---|---|---|
+| 1 | **[Product Ad Studio](#1-product-ad-studio)** | Turn product photos into ad creatives | Product images, brief | Ad creatives, UGC storyboards, revisions | Working prototype (mock images by default) |
+| 2 | **[Storyforge](#2-storyforge-story--documentary-video-platform)** | Web platform that runs the video engines on a schedule | A topic or an idea | Finished vertical videos | Working, publishing step unfinished |
+| 3 | **[Video engines](#3-video-engines)** | Generate narrated 9:16 videos from a topic | A topic | An MP4 with voice and captions | Working (CLI) |
+| 4 | **[Local image engine](#4-local-image-engine)** | Generate images on your own GPU | A video idea | Storyboard frames (PNG) | Experimental |
+| + | **[Social connectors](#5-social-connectors)** | Search, post and reply on Reddit, X, Instagram, YouTube | Credentials, text, media | Published posts, research data | Library of toolboxes |
+
+## How the pieces fit together
+
+```mermaid
+flowchart LR
+    subgraph Standalone
+        A["Product Ad Studio<br/>apps/studio-web"]
+        D["Local image engine<br/>engines/local-image"]
+        E["Social connectors<br/>connectors"]
+    end
+    subgraph Storyforge
+        F["Storyforge web<br/>apps/storyforge-web"] --> G["Storyforge API<br/>apps/studio-api"]
+        G --> H["Story video engine<br/>engines/story-video"]
+        G --> I["Documentary engine<br/>engines/documentary-video"]
+    end
+    H -. "future: social upload" .-> E
+    I -. "future: social upload" .-> E
+    D -. "future: replaces Replicate" .-> H
+```
+
+- **Solid arrows already work.** Storyforge's API launches the two video engines as subprocesses (see `apps/studio-api/app/pipeline.py`).
+- **Dotted arrows are not wired yet.** Connectors, the local image engine and the Product Ad Studio currently run on their own.
+- Every component has its own dependencies and its own `.env`. You can use any one of them without the rest.
 
 ## What is inside
 
-| Path | What it does | Stack |
+| Path | Part of | Stack |
 |---|---|---|
-| [apps/studio-web](apps/studio-web) | Product ad creative studio (ProductMarketer): uploads, projects, generations, revisions, UGC storyboards, provider/model routing. React frontend with an Express and SQLite API in `server/`. | React, Vite, Express |
-| [apps/studio-api](apps/studio-api) | Storyforge API: projects, Celery generation tasks, scheduler. | FastAPI, Celery, Redis |
-| [apps/storyforge-web](apps/storyforge-web) | Storyforge creator workspace and visual workflow canvas. | React, Vite |
-| [engines/story-video](engines/story-video) | Topic to narrated 9:16 story video (Gemini, Replicate, ElevenLabs, FFmpeg). | Python |
-| [engines/documentary-video](engines/documentary-video) | Topic to documentary explainer using licensed real archive photos (Openverse, Wikimedia Commons). | Python |
-| [engines/local-image](engines/local-image) | Local image generation: Ideogram 4 source and a Stable Diffusion storyboard pipeline. | Python, diffusers |
-| [engines/product-ads](engines/product-ads) | Placeholder for the product-ad engine, currently inside `apps/studio-web/server`. | n/a |
-| [connectors](connectors) | Reddit, X, Instagram and YouTube toolboxes. | Python |
-| [docs](docs) | Research and architecture notes. | Markdown |
+| [apps/studio-web](apps/studio-web) | Product Ad Studio (React frontend and Express API in `server/`) | React, Vite, Express, SQLite |
+| [apps/studio-api](apps/studio-api) | Storyforge backend | FastAPI, Celery, Redis |
+| [apps/storyforge-web](apps/storyforge-web) | Storyforge frontend | React, Vite |
+| [engines/story-video](engines/story-video) | Video engines | Python |
+| [engines/documentary-video](engines/documentary-video) | Video engines | Python |
+| [engines/local-image](engines/local-image) | Local image engine (includes upstream Ideogram 4 source) | Python, diffusers |
+| [engines/product-ads](engines/product-ads) | Placeholder for extracting the ad engine from `studio-web` | n/a |
+| [connectors](connectors) | Social connectors | Python |
+| [docs](docs) | Research and architecture notes | Markdown |
 
-## Getting started
+---
 
-Prerequisites: Node.js 20+, Python 3.12+, FFmpeg, and Docker with Docker Compose for Storyforge. Each component reads its own `.env`; copy the `.env.example` next to it first (see [.env.example](.env.example)).
+## 1. Product Ad Studio
 
-**Product ad studio**
+**Location:** [apps/studio-web](apps/studio-web) · Full guide: [apps/studio-web/README.md](apps/studio-web/README.md)
+
+A creative studio for product marketing, in the spirit of AdCreative.ai (see the [research notes](docs/adcreative-research.md)). You upload product photos, create a project, and generate ad creatives. Every generation is saved, can be revised into a child version, and can be approved.
+
+What it includes:
+
+- Pages for overview, projects, generate, editor, library, videos (UGC storyboards), insights, competitors, integrations and settings.
+- An **AI models** page to connect OpenAI, Anthropic, Gemini, Replicate, fal, Hugging Face, Ollama or any OpenAI-compatible endpoint, and assign them to LLM, VLM, image and video roles. API keys are stored encrypted (AES-256-GCM).
+- A SQLite database and local file storage, so projects survive restarts.
+
+**Honest status:** the default provider draws SVG mockups so the whole flow works without paid keys. Real image and video generation needs a provider adapter. There is a demo user instead of real authentication.
 
 ```bash
 cd apps/studio-web
 npm install
-npm run dev
+npm run dev        # frontend http://127.0.0.1:4173, API http://127.0.0.1:8787
 ```
 
-The frontend runs at `http://127.0.0.1:4173` and the API at `http://127.0.0.1:8787`. More detail in [apps/studio-web/README.md](apps/studio-web/README.md).
+## 2. Storyforge (story and documentary video platform)
 
-**Storyforge**
+**Location:** [apps/studio-api](apps/studio-api) (backend) and [apps/storyforge-web](apps/storyforge-web) (frontend) · Full guide: [docs/storyforge.md](docs/storyforge.md)
+
+A web platform that puts the [video engines](#3-video-engines) behind one interface. Instead of running scripts in a terminal you create projects in a browser, queue them, and let a scheduler run them again later.
+
+- **Creation modes:** AI-photo stories, Reddit and gameplay stories, real-image stories, historical documentaries. Stock-footage and AI-avatar modes are visible but marked *coming soon*.
+- **Workflow canvas:** arrange generators visually, add an optional scheduler and social destination, save, and re-run.
+- **Prompt assistant:** leave the topic blank and it suggests one.
+- **Stack:** FastAPI for the API, Celery workers for generation, Redis as the queue, Celery Beat for scheduling, SQLite for project records.
+
+**Honest status:** generation works. The last step, uploading to the social platform, is not finished.
 
 ```bash
-docker compose up --build
-cd apps/storyforge-web && npm install && npm run dev
+docker compose up --build                    # API, Redis, worker, scheduler
+cd apps/storyforge-web && npm install && npm run dev   # http://localhost:5173
 ```
 
-Open `http://localhost:5173`. More detail in [docs/storyforge.md](docs/storyforge.md).
+## 3. Video engines
 
-**Video engines**
+These two command-line tools do the actual work behind Storyforge, and they also run on their own. Both take a topic and produce a vertical 1080x1920 MP4 with narration and captions.
 
-Each engine runs standalone. See [engines/story-video/README.md](engines/story-video/README.md) and [engines/documentary-video/README.md](engines/documentary-video/README.md).
+| | Story video | Documentary video |
+|---|---|---|
+| **Location** | [engines/story-video](engines/story-video) | [engines/documentary-video](engines/documentary-video) |
+| **Style** | Short narrated stories with a hook and payoff | Factual explainers built on real history |
+| **Visuals** | AI-generated scene images (Replicate), or gameplay footage in "video game mode" | Real archive photos from Openverse and Wikimedia Commons, filtered by license |
+| **Research** | Gemini plans queries, DuckDuckGo supplies sources | Same, with explicit authentic-photo requirement per scene |
+| **Voice and video** | ElevenLabs narration, FFmpeg rendering, animated captions | Same |
+| **Personality** | Niche profiles (audience, tone, hooks) as JSON | Question, context, cause, evidence, consequence structure |
+
+Needs Python 3.12+, FFmpeg, and API keys for Gemini and ElevenLabs (plus Replicate for AI images).
+
+```bash
+cd engines/story-video
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt && cp .env.example .env   # add your keys
+python main.py "A taxi driver receives a request from an abandoned town" --duration 20 --scenes 4
+```
+
+Documentary example: `python main.py "The 2001 financial crisis in Turkey" --duration 45 --scenes 7` inside [engines/documentary-video](engines/documentary-video). Output lands in `outputs/<timestamp>/`.
+
+## 4. Local image engine
+
+**Location:** [engines/local-image](engines/local-image)
+
+Two things live here:
+
+1. **Ideogram 4**, the upstream open-weight text-to-image model source, kept for reference and experiments. Its own guide is [engines/local-image/README.md](engines/local-image/README.md).
+2. **`story_image_pipeline.py`**, our own script: a local Ollama LLM writes a storyboard from your idea, then Stable Diffusion 1.5 renders each frame on your GPU. No cloud keys needed. The `test_*.py` files are quick GPU checks for SD 1.5 and Ideogram in fp8 and nf4.
+
+```bash
+cd engines/local-image
+python story_image_pipeline.py --idea "An AI student's first day" --out outputs/demo
+```
+
+**Honest status:** experimental, not connected to Storyforge yet. The long-term idea is to replace the paid Replicate step in the story engine.
+
+## 5. Social connectors
+
+**Location:** [connectors](connectors)
+
+Large toolboxes (roughly 8,000 lines in total) for working with social platforms. Each one supports both browser automation (Selenium, you sign in normally) and the platform's official API.
+
+| Toolbox | Can do |
+|---|---|
+| [reddit_toolbox.py](connectors/reddit_toolbox.py) | Search, inspect communities and profiles, post text or links, comment, reply |
+| [x_toolbox.py](connectors/x_toolbox.py) | Search, publish posts, threads and media posts, reply, like |
+| [instagram_toolbox.py](connectors/instagram_toolbox.py) | Search, publish posts, create image and reel containers, comment, message |
+| [youtube_toolbox.py](connectors/youtube_toolbox.py) | Search, publish videos, comment, reply, create playlists |
+
+Use them for low-volume, supervised work and follow each platform's terms and rate limits. `connectors/main.py` is an agent entry point that imports a `MarketingApp` package which is not in this repository yet, so it does not run as-is; the toolboxes themselves are importable.
+
+---
+
+## Setup requirements
+
+- Node.js 20+ for the web apps
+- Python 3.12+ for engines, connectors and the Storyforge API
+- FFmpeg for the video engines
+- Docker with Compose for Storyforge
+- A CUDA GPU for the local image engine (optional)
+
+Each component reads its own `.env`. Copy the `.env.example` next to it first (see the root [.env.example](.env.example) for the list).
 
 ## Secrets and generated files
 
 Real `.env` files, generated media (`outputs/`, mp4, wav, mp3), `node_modules`, virtualenvs and runtime databases are git-ignored. Never commit API keys.
 
-## Known limitations
+## Roadmap
 
-- `connectors/main.py` imports a `MarketingApp` package that is not part of this repository yet.
-- The product studio's default provider produces SVG mockups, not photographic output.
-- Storyforge's final social-upload step is connector-specific and not finished.
+- Shared engine interface so every generator takes and returns the same shape
+- Extract the ad engine into [engines/product-ads](engines/product-ads)
+- Connect real image and video providers to the Product Ad Studio
+- Wire the connectors into Storyforge for automatic publishing
+- Use the local image engine as a drop-in replacement for Replicate
 
 ## Help
 
