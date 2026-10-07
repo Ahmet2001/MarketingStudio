@@ -6,9 +6,9 @@ RUN apt-get update \
 
 WORKDIR /workspace
 
-COPY backend/requirements.txt /tmp/backend-requirements.txt
-COPY Storyteller/requirements.txt /tmp/storyteller-requirements.txt
-COPY HistoicalEventExplainer/requirements.txt /tmp/explainer-requirements.txt
+COPY apps/studio-api/requirements.txt /tmp/backend-requirements.txt
+COPY engines/story-video/requirements.txt /tmp/storyteller-requirements.txt
+COPY engines/documentary-video/requirements.txt /tmp/explainer-requirements.txt
 RUN pip install --no-cache-dir \
     -r /tmp/backend-requirements.txt \
     -r /tmp/storyteller-requirements.txt \
@@ -16,7 +16,7 @@ RUN pip install --no-cache-dir \
 
 COPY . /workspace
 
-ENV PYTHONPATH=/workspace/backend
-WORKDIR /workspace/backend
+ENV PYTHONPATH=/workspace/apps/studio-api
+WORKDIR /workspace/apps/studio-api
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

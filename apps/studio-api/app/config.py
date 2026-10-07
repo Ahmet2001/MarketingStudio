@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 
-WORKSPACE_ROOT = Path(__file__).resolve().parents[2]
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 RUNTIME_ROOT = Path(
     os.getenv("STORYFORGE_RUNTIME_DIR", BACKEND_ROOT / "runtime")
@@ -43,8 +43,8 @@ YOUTUBE_CLIENT_SECRET = os.getenv("YOUTUBE_CLIENT_SECRET", "")
 TIKTOK_CLIENT_KEY = os.getenv("TIKTOK_CLIENT_KEY", "")
 TIKTOK_CLIENT_SECRET = os.getenv("TIKTOK_CLIENT_SECRET", "")
 
-STORYTELLER_ROOT = WORKSPACE_ROOT / "Storyteller"
-EXPLAINER_ROOT = WORKSPACE_ROOT / "HistoicalEventExplainer"
+STORYTELLER_ROOT = WORKSPACE_ROOT / "engines" / "story-video"
+EXPLAINER_ROOT = WORKSPACE_ROOT / "engines" / "documentary-video"
 PYTHON_EXECUTABLE = os.getenv("STORYFORGE_PYTHON", "python")
 
 ALLOWED_ORIGINS = [
