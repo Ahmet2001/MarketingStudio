@@ -1,0 +1,28 @@
+# A deterministic text tool: no network, no keys, no approval. Meant to be called by an agent.
+#   python -m studio run examples/workflows/text_summary.yaml --sources examples/text_summary \
+#       --input title="Notes" --input text="..."
+spec_version: "0.1"
+workflow:
+  id: text_summary
+  name: Text summary
+  version: 0.1.0
+  description: Counts the words of a text and lists its most frequent words as a short Markdown report.
+  inputs:
+    text: {type: text, required: true, description: The text to summarise.}
+    title: {type: text, required: true, description: Title of the report.}
+    top: {type: integer, default: 5, description: How many frequent words to list.}
+  steps:
+    - id: count
+      capability: summary.word_count
+      with: {text: "{{ inputs.text }}"}
+    - id: frequent
+      capability: summary.top_words
+      with: {text: "{{ inputs.text }}", top: "{{ inputs.top }}"}
+    - id: write
+      capability: summary.report
+      with:
+        title: "{{ inputs.title }}"
+        words: "{{ steps.count.outputs.result }}"
+        top: "{{ steps.frequent.outputs.result }}"
+  outputs:
+    report: "{{ steps.write.outputs.result }}"

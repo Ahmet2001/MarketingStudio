@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Callable
 
 from ..bundle import Bundle
-from .agent_pack import agent_pack
+from .agent_pack import agent_bundle, agent_pack
 from .job_handler import job_handler
 from .mcp_server import mcp_server
 from .tool_schema import tool_schema
@@ -22,9 +22,10 @@ Adapter = Callable[[Bundle], tuple[dict[str, str], list[str]]]
 ADAPTERS: dict[str, Adapter] = {
     "tool-schema": tool_schema,
     "agent-pack": agent_pack,
+    "agent-bundle": agent_bundle,
     "job-handler": job_handler,
     "worker": worker,
     "mcp": mcp_server,
 }
 
-__all__ = ["ADAPTERS", "Adapter", "agent_pack", "job_handler", "mcp_server", "tool_schema", "worker"]
+__all__ = ["ADAPTERS", "Adapter", "agent_bundle", "agent_pack", "job_handler", "mcp_server", "tool_schema", "worker"]

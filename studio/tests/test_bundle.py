@@ -128,6 +128,30 @@ def test_agent_pack_files_and_signature(setup, tmp_path):
     assert "Ask the user to confirm" in doc_text
 
 
+def test_agent_bundle_adds_an_agent_that_owns_the_tool(setup):
+    _, registry, doc = setup
+    pack_files, _ = ADAPTERS["agent-pack"](build_bundle(doc, registry))
+    files, notes = ADAPTERS["agent-bundle"](build_bundle(doc, registry))
+    assert set(files) == set(pack_files) | {"agents/size_and_send_agent.yaml", "prompts/size_and_send_agent.md"}
+    assert files["tools/size_and_send.py"] == pack_files["tools/size_and_send.py"]  # the same tool file
+    plugin = yaml.safe_load(files["plugin.yaml"])
+    assert plugin["type"] == "agent_bundle" and plugin["agents"] == ["agents/size_and_send_agent.yaml"]
+    agent = yaml.safe_load(files["agents/size_and_send_agent.yaml"])
+    assert agent["name"] == "size_and_send_agent" and agent["type"] == "config" and agent["enabled"] is True
+    assert agent["tools"] == ["size_and_send"] and agent["tool_mode"] == "custom"
+    assert agent["system_prompt_file"] == "prompts/size_and_send_agent.md"
+    # this workflow writes outside the machine, so the agent is told never to approve on its own
+    assert "Never set `approve` to true" in files["prompts/size_and_send_agent.md"]
+    assert "restart it after installing" in files["README.md"] and any("restart the agent" in n for n in notes)
+
+
+def test_agent_bundle_refuses_a_name_that_cannot_be_an_agent(setup):
+    _, registry, doc = setup
+    doc["workflow"]["id"] = "x" * 60  # fine as a tool name, too long once "_agent" is added
+    with pytest.raises(ValueError, match="agent name"):
+        ADAPTERS["agent-bundle"](build_bundle(doc, registry))
+
+
 def test_generated_tool_end_to_end(setup, tmp_path):
     _, registry, doc = setup
     files, _ = ADAPTERS["agent-pack"](build_bundle(doc, registry))

@@ -247,3 +247,66 @@ def _readme(bundle: Bundle, name: str, env_names: list[str]) -> str:
     out += ["## Where runs go", "", "`STUDIO_TOOL_HOME` (default: the system temp folder, `studio_tools/`). "
             "Each call gets its own run folder, returned as `run_folder`.", ""]
     return "\n".join(out)
+
+
+AGENT_NAME_RE = TOOL_NAME_RE  # the agent app uses the same rule for agent names
+
+PROMPT = """You run exactly one tool, `{tool}`, and nothing else.
+
+{about}
+
+Rules:
+- Call `{tool}` with the inputs the task gives you. Do not invent values for inputs the task does not give; ask for them instead.
+- Give back the tool's result as it is. Do not rewrite, round or embellish numbers and text it returns.
+- If the tool returns an error, report the error text as it is.
+{approval}"""
+
+
+def agent_bundle(bundle: Bundle) -> tuple[dict[str, str], list[str]]:
+    """A pack with the tool **and** a small agent that owns it.
+
+    An installed tool is only a registry entry: the orchestrator cannot call it until some
+    sub-agent has it in its tool list. This bundle adds that agent, so installing the pack is enough
+    for the orchestrator to delegate to the workflow.
+    """
+
+    files, notes = agent_pack(bundle)
+    manifest = bundle.manifest
+    tool = manifest["id"]
+    agent = f"{tool}_agent"
+    if not AGENT_NAME_RE.match(agent):
+        raise ValueError(
+            f"'{agent}' cannot be an agent name: use 3 to 64 lowercase letters, digits or underscores. "
+            "Shorten the workflow id."
+        )
+    plugin = yaml.safe_load(files["plugin.yaml"])
+    plugin["type"] = "agent_bundle"
+    plugin["agents"] = [f"agents/{agent}.yaml"]
+    files["plugin.yaml"] = yaml.safe_dump(plugin, sort_keys=False, allow_unicode=True)
+    approval = (
+        "- This tool changes something outside the machine. Never set `approve` to true unless the task says in so many words "
+        "that the user approved it.\n"
+        if gated(bundle) else ""
+    )
+    files[f"agents/{agent}.yaml"] = yaml.safe_dump(
+        {
+            "name": agent,
+            "type": "config",
+            "enabled": True,
+            "description": f"{manifest['description']} Delegate to this agent to run the `{tool}` workflow.",
+            "model": "default",
+            "tool_mode": "custom",
+            "tools": [tool],
+            "system_prompt_file": f"prompts/{agent}.md",
+        },
+        sort_keys=False, allow_unicode=True,
+    )
+    files[f"prompts/{agent}.md"] = PROMPT.format(tool=tool, about=manifest["description"], approval=approval)
+    files["README.md"] = files["README.md"].rstrip("\n") + (
+        f"\n\n## The agent\n\nThis pack is an `agent_bundle`: besides the tool it adds a sub-agent named `{agent}` that owns it, "
+        f"so the orchestrator can delegate to `{agent}` to run the workflow. The agent reads its sub-agents at start-up, "
+        "so restart it after installing.\n"
+    )
+    notes = [n for n in notes if not n.startswith("Install by hand")]
+    notes.insert(0, f"Install with /agent pack install <this folder>, then restart the agent: it adds the agent `{agent}`, which owns the tool.")
+    return files, notes

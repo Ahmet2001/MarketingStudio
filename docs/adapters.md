@@ -29,6 +29,7 @@ Two kinds of step:
 
 ```bash
 python -m studio adapt workflow.yaml --target agent-pack  --out ./pack   --sources ./my_tools
+python -m studio adapt workflow.yaml --target agent-bundle --out ./pack  --sources ./my_tools
 python -m studio adapt workflow.yaml --target tool-schema --out ./schema --sources ./my_tools
 python -m studio adapt workflow.yaml --target job-handler --out ./handler --sources ./my_tools
 python -m studio adapt workflow.yaml --target worker      --out ./worker  --sources ./my_tools
@@ -38,6 +39,12 @@ python -m studio adapt workflow.yaml --target mcp         --out ./mcp     --sour
 The first two, and `mcp`, make the workflow a **tool** a model calls. The last two make it an **item a worker runs**: `job-handler` is one file you plug into a worker you already have, `worker` is a whole process that serves a queue.
 
 Each prints notes about what the target cannot do. Read them.
+
+### `agent-bundle`
+
+`agent-pack` plus one small agent. Installing a `tool_pack` only registers the tool; an orchestrator can call a tool only through a sub-agent that has it in its tool list, so on its own the tool is not usable by an agent that runs unattended. `agent-bundle` writes the same `tools/<name>.py` and adds `agents/<name>_agent.yaml` (a config agent that owns the tool) and `prompts/<name>_agent.md`, with `plugin.yaml` of type `agent_bundle`. The prompt tells the agent to call the tool with the given inputs, return the result unchanged, and, for a workflow that writes outside the machine, never to set `approve` unless the task says the user approved.
+
+Install it, then restart the agent (it reads its sub-agents at start-up). The orchestrator then has an agent named `<workflow id>_agent` it can delegate to. Checked against the real agent app by running its own `preview_agent_pack` (type `agent_bundle`, no errors) and then a task through its job queue; see MarketingPool's `docker/README.md`.
 
 ### `tool-schema`
 

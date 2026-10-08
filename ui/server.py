@@ -33,6 +33,7 @@ MAX_SHOWN = 400_000  # characters of one file sent to the page; the zip always h
 TARGETS = {
     "bundle": "The neutral export: workflow, contracts, the standard-library runner and single-file engines. Everything else is built from this.",
     "agent-pack": "A tool pack for BrowserAgent: plugin.yaml and one self-contained tools/<name>.py.",
+    "agent-bundle": "agent-pack plus a small agent that owns the tool, so an agent app's orchestrator can delegate to the workflow once the pack is installed.",
     "tool-schema": "Tool definitions for LLM function calling, in Anthropic and OpenAI shapes. A definition only.",
     "job-handler": "One handler.py a worker you already run can call (import it, or pipe JSON to it).",
     "worker": "A standalone queue worker (file queue or Supabase), with a migration, Dockerfile and per-step approval.",
