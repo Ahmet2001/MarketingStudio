@@ -166,7 +166,7 @@ Large toolboxes (roughly 8,000 lines in total) for working with social platforms
 | [instagram_toolbox.py](connectors/instagram_toolbox.py) | Search, publish posts, create image and reel containers, comment, message |
 | [youtube_toolbox.py](connectors/youtube_toolbox.py) | Search, publish videos, comment, reply, create playlists |
 
-Use them for low-volume, supervised work and follow each platform's terms and rate limits. `connectors/main.py` is an agent entry point that imports a `MarketingApp` package which is not in this repository yet, so it does not run as-is. The toolboxes have the same problem: each imports `.araclar.browser_araclari` (and needs `selenium`), a package that is not in this repository, so they cannot be imported here until it is provided.
+Use them for low-volume, supervised work and follow each platform's terms and rate limits. `connectors/main.py` is an agent entry point that imports a `MarketingApp` package which is not in this repository yet, so it does not run as-is. The toolboxes import `.araclar.browser_araclari` (and need `selenium`), a package that lives on the server side and not in this repository. Here they are definitions: you can write workflows with them and validate, plan and export, and they run where the toolboxes are installed.
 
 ---
 

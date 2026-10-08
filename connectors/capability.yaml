@@ -1,10 +1,11 @@
 # Social connectors. Every function named here exists in the matching *_toolbox.py.
 # All publish capabilities change state outside this machine, so they require approval.
 #
-# NOT RUNNABLE FROM THIS REPOSITORY YET: every toolbox imports
-# `.araclar.browser_araclari` and selenium, and the `araclar` package is not part
-# of this repository. The descriptions below match the function signatures, but the
-# functions cannot be imported here until that package is provided.
+# These are definitions. They are meant to run on the server side, where the
+# toolboxes and the packages they need (the `araclar` package and selenium) are
+# installed. Here you can write workflows with them and run validate, plan and
+# export, but `studio run` cannot import the toolboxes on this machine: `araclar`
+# is not part of this repository.
 spec_version: "0.1"
 capabilities:
   # ---------- search (read only) ----------
@@ -30,7 +31,7 @@ capabilities:
     cost: {estimate_usd: 0, notes: Subject to Reddit API rate limits.}
     execution: {type: python, path: "..", module: connectors.reddit_toolbox, function: search_reddit_api_posts}
     failure_modes:
-      - "Cannot be imported until the missing araclar.browser_araclari package is provided."
+      - "Runs only where the toolboxes and the araclar package (plus selenium) are installed, not from this repository."
       - Missing credentials or user agent.
       - Rate limited by Reddit.
 
@@ -54,7 +55,7 @@ capabilities:
     cost: {estimate_usd: null, notes: Depends on the X API plan.}
     execution: {type: python, path: "..", module: connectors.x_toolbox, function: search_x_api_posts}
     failure_modes:
-      - "Cannot be imported until the missing araclar.browser_araclari package is provided."
+      - "Runs only where the toolboxes and the araclar package (plus selenium) are installed, not from this repository."
       - Missing bearer token or insufficient API plan.
 
   - id: social.search.youtube
@@ -79,7 +80,7 @@ capabilities:
     cost: {estimate_usd: 0, notes: Uses YouTube Data API quota units.}
     execution: {type: python, path: "..", module: connectors.youtube_toolbox, function: search_youtube_api}
     failure_modes:
-      - "Cannot be imported until the missing araclar.browser_araclari package is provided."
+      - "Runs only where the toolboxes and the araclar package (plus selenium) are installed, not from this repository."
       - Daily API quota exhausted.
 
   # ---------- publish (writes external state, needs approval) ----------
@@ -105,7 +106,7 @@ capabilities:
     cost: {estimate_usd: 0, notes: Subject to subreddit rules and API rate limits.}
     execution: {type: python, path: "..", module: connectors.reddit_toolbox, function: publish_reddit_api_text_post}
     failure_modes:
-      - "Cannot be imported until the missing araclar.browser_araclari package is provided."
+      - "Runs only where the toolboxes and the araclar package (plus selenium) are installed, not from this repository."
       - Subreddit rules or spam filters reject the post.
 
   - id: social.publish.reddit_link
@@ -130,7 +131,7 @@ capabilities:
     cost: {estimate_usd: 0, notes: Subject to subreddit rules and API rate limits.}
     execution: {type: python, path: "..", module: connectors.reddit_toolbox, function: publish_reddit_api_link_post}
     failure_modes:
-      - "Cannot be imported until the missing araclar.browser_araclari package is provided."
+      - "Runs only where the toolboxes and the araclar package (plus selenium) are installed, not from this repository."
       - Subreddit rules or spam filters reject the post.
 
   - id: social.publish.x_post
@@ -153,7 +154,7 @@ capabilities:
     cost: {estimate_usd: null, notes: Depends on the X API plan.}
     execution: {type: python, path: "..", module: connectors.x_toolbox, function: publish_x_api_post}
     failure_modes:
-      - "Cannot be imported until the missing araclar.browser_araclari package is provided."
+      - "Runs only where the toolboxes and the araclar package (plus selenium) are installed, not from this repository."
       - Duplicate or over-length text is rejected by X.
 
   - id: social.publish.youtube_video
@@ -179,7 +180,7 @@ capabilities:
     cost: {estimate_usd: 0, notes: Upload consumes a large block of daily quota units.}
     execution: {type: python, path: "..", module: connectors.youtube_toolbox, function: upload_youtube_api_video}
     failure_modes:
-      - "Cannot be imported until the missing araclar.browser_araclari package is provided."
+      - "Runs only where the toolboxes and the araclar package (plus selenium) are installed, not from this repository."
       - Quota exhausted or unverified API project forces uploads to private.
 
   - id: social.publish.instagram_reel
@@ -203,5 +204,5 @@ capabilities:
     cost: {estimate_usd: 0, notes: Limited by the account's daily publishing limit.}
     execution: {type: python, path: "..", module: connectors.instagram_toolbox, function: publish_instagram_api_reel}
     failure_modes:
-      - "Cannot be imported until the missing araclar.browser_araclari package is provided."
+      - "Runs only where the toolboxes and the araclar package (plus selenium) are installed, not from this repository."
       - Instagram cannot fetch the video URL, or processing times out.
