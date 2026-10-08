@@ -217,3 +217,51 @@ def test_resolve_file_limits(tmp_path):
     assert resolve_file(str(tmp_path / "x.txt"), "f", tmp_path, policy2) == str((tmp_path / "x.txt").resolve())
     with pytest.raises(RunError, match="allowed folders"):
         resolve_file("/etc/hostname", "f", tmp_path, policy2)
+
+
+AGENT_STYLE_LOADER = '''
+from __future__ import annotations
+import inspect, json, sys, types
+
+def load(path, name):
+    # how the agent reads a custom tool: compile() inherits this file's future flags
+    module = types.ModuleType("custom_tool_" + name)
+    exec(compile(open(path, encoding="utf-8").read(), path, "exec"), module.__dict__)
+    return getattr(module, name)
+'''
+
+
+def test_tool_keeps_real_types_when_the_agent_compiles_it_with_future_annotations(setup, tmp_path):
+    _, registry, doc = setup
+    files, _ = ADAPTERS["agent-pack"](build_bundle(doc, registry))
+    tool = tmp_path / "tool.py"
+    tool.write_text(files["tools/size_and_send.py"], encoding="utf-8")
+    loader = tmp_path / "loader.py"
+    loader.write_text(AGENT_STYLE_LOADER, encoding="utf-8")
+    code = textwrap.dedent(f'''
+        import sys, json, inspect
+        sys.path.insert(0, {str(tmp_path)!r})
+        import loader
+        fn = loader.load({str(tool)!r}, "size_and_send")
+        types = {{k: getattr(v.annotation, "__name__", str(v.annotation)) for k, v in inspect.signature(fn).parameters.items()}}
+        print(json.dumps(types))
+    ''')
+    done = subprocess.run([sys.executable, "-I", "-c", code], capture_output=True, text=True, cwd="/")
+    assert done.returncode == 0, done.stderr
+    types = json.loads(done.stdout)
+    assert types == {"file": "str", "prefix": "str", "times": "int", "loud": "bool", "approve": "bool"}
+
+
+def test_the_text_false_does_not_approve(setup, tmp_path):
+    _, registry, doc = setup
+    files, _ = ADAPTERS["agent-pack"](build_bundle(doc, registry))
+    path = tmp_path / "tool.py"
+    path.write_text(files["tools/size_and_send.py"], encoding="utf-8")
+    ref = json.dumps({"filename": "a.txt", "content_base64": base64.b64encode(b"hi").decode()})
+    sent = tmp_path / "sent.txt"
+    for value in ("false", "False", "0", "no", ""):
+        result = run_tool(path, f"module.size_and_send({ref!r}, approve={value!r})", {"SENT_FILE": str(sent)}, tmp_path)
+        assert result["status"] == "needs_approval", (value, result)
+    assert not sent.exists()
+    ok = run_tool(path, f"module.size_and_send({ref!r}, approve='true')", {"SENT_FILE": str(sent)}, tmp_path)
+    assert ok["status"] == "ok"

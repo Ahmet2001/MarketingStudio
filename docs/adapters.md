@@ -46,6 +46,8 @@ Each prints notes about what the target cannot do. Read them.
 
 A folder the BrowserAgent installs with `/agent pack install`: `plugin.yaml`, `tools/<name>.py`, `env.example`, `README.md`. The tool is **one self-contained file** (runner, workflow, capabilities and engine sources embedded) shaped the way that agent reads tools: a synchronous function named like the tool, real `str/int/float/bool` annotations, the description in the docstring. The workflow id becomes the tool name and must be 3 to 64 lowercase letters, digits or underscores.
 
+Checked against the BrowserAgent's own code (in a scratch copy, nothing in that project was touched): its pack preview reports the pack installable, `install_agent_pack` installs it, its loader finds the function, and its schema builder sees real `integer`/`boolean` parameters. Two things found that way are handled in the generated file: the agent compiles tool files with `from __future__ import annotations` in force, which would make every parameter look like a string (the file pins the real types), and a model may pass `approve` as the text `"false"` (anything but a true-like value does not approve).
+
 The tool returns a dict: `{"status": "ok", "outputs": ..., "run_folder": ...}`, `{"status": "needs_approval", ...}`, or `{"status": "error", "error": ...}`.
 
 ### `job-handler`

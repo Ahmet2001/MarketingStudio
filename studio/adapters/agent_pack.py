@@ -66,7 +66,15 @@ def _home():
     return root
 
 
+def _truthy(value):
+    # an agent may hand over "false" as text, and bool("false") is True
+    if isinstance(value, str):
+        return value.strip().lower() in ("true", "1", "yes", "y")
+    return bool(value)
+
+
 def _invoke(values, approve):
+    approve = _truthy(approve)
     try:
         runner = _load_runner()
         if _GATED and not approve:
@@ -83,7 +91,7 @@ def _invoke(values, approve):
         result = runner.run(
             _BUNDLE["workflow"], _BUNDLE["capabilities"], bases,
             {k: v for k, v in values.items() if v is not None}, workdir,
-            approve=lambda step, cap: bool(approve), files=runner.FilePolicy.from_env(),
+            approve=lambda step, cap: approve, files=runner.FilePolicy.from_env(),
         )
         return {"status": "ok", "outputs": result.outputs, "run_folder": str(workdir)}
     except Exception as error:  # the agent should read the reason, not a traceback
@@ -129,10 +137,18 @@ def _function(name: str, bundle: Bundle) -> str:
     names = [n for n, _ in ordered_inputs(bundle)]
     call = "{" + ", ".join(f"{n!r}: {n}" for n in names) + "}"
     approve_arg = "approve" if gated(bundle) else "True"
+    annotations = {n: _annotation(spec) for n, spec in ordered_inputs(bundle)}
+    if gated(bundle):
+        annotations["approve"] = "bool"
+    annotations["return"] = "dict"
+    pinned = "{" + ", ".join(f"{k!r}: {v}" for k, v in annotations.items()) + "}"
     return (
         f"def {name}({', '.join(params)}) -> dict:\n"
         f'    """\n{body}\n    """\n'
-        f"    return _invoke({call}, {approve_arg})\n"
+        f"    return _invoke({call}, {approve_arg})\n\n\n"
+        "# An agent may compile this file with `from __future__ import annotations` in force, which turns the\n"
+        "# annotations above into text and makes every parameter look like a string. Pin the real types.\n"
+        f"{name}.__annotations__ = {pinned}\n"
     )
 
 
