@@ -1,0 +1,33 @@
+# Summarise a text, then "send" the report. The last step writes outside, so it needs approval.
+#   python -m studio run examples/workflows/report_and_send.yaml --sources examples/text_summary examples/outbox_demo ...
+spec_version: "0.1"
+workflow:
+  id: report_and_send
+  name: Report and send
+  version: 0.1.0
+  description: Summarises a text into a short report and sends it to a recipient. Sending needs approval.
+  inputs:
+    text: {type: text, required: true, description: The text to summarise.}
+    title: {type: text, required: true, description: Title of the report.}
+    to: {type: text, required: true, description: Who receives the report.}
+  steps:
+    - id: count
+      capability: summary.word_count
+      with: {text: "{{ inputs.text }}"}
+    - id: frequent
+      capability: summary.top_words
+      with: {text: "{{ inputs.text }}", top: 3}
+    - id: write
+      capability: summary.report
+      with:
+        title: "{{ inputs.title }}"
+        words: "{{ steps.count.outputs.result }}"
+        top: "{{ steps.frequent.outputs.result }}"
+    - id: send
+      capability: outbox.send
+      with:
+        to: "{{ inputs.to }}"
+        message: "{{ steps.write.outputs.result }}"
+  outputs:
+    report: "{{ steps.write.outputs.result }}"
+    receipt: "{{ steps.send.outputs.result }}"

@@ -112,7 +112,7 @@ def run_tool(tool_path: Path, call: str, env_extra: dict, tmp_path: Path) -> dic
 def test_agent_pack_files_and_signature(setup, tmp_path):
     _, registry, doc = setup
     files, notes = ADAPTERS["agent-pack"](build_bundle(doc, registry))
-    assert set(files) == {"plugin.yaml", "tools/size_and_send.py", "env.example", "README.md"}
+    assert set(files) == {"plugin.yaml", "tools/size_and_send.py", "env.example", "README.md", "requirements.txt"}  # the engine declares PyYAML
     plugin = yaml.safe_load(files["plugin.yaml"])
     assert plugin["type"] == "tool_pack" and plugin["tools"][0]["file"] == "tools/size_and_send.py"
     assert any("not by the agent" in n for n in notes)
@@ -143,6 +143,32 @@ def test_agent_bundle_adds_an_agent_that_owns_the_tool(setup):
     # this workflow writes outside the machine, so the agent is told never to approve on its own
     assert "Never set `approve` to true" in files["prompts/size_and_send_agent.md"]
     assert "restart it after installing" in files["README.md"] and any("restart the agent" in n for n in notes)
+
+
+def test_agent_packs_list_the_python_packages_their_engines_need(tmp_path):
+    engine = tmp_path / "engine.py"
+    engine.write_text(
+        'CAPABILITIES = [{"id": "p.size", "function": "size", "description": "d", "network": False,\n'
+        '                 "writes_external_state": False, "packages": ["humanize>=4"]}]\n'
+        "def size(n: int) -> str:\n    return str(n)\n", encoding="utf-8")
+    doc = {"spec_version": "0.1", "workflow": {"id": "human_size", "name": "H", "inputs": {"n": {"type": "integer", "required": True}},
+           "steps": [{"id": "a", "capability": "p.size", "with": {"n": "{{ inputs.n }}"}}], "outputs": {"s": "{{ steps.a.outputs.result }}"}}}
+    bundle = build_bundle(doc, load_registry([tmp_path]))
+    for target in ("agent-pack", "agent-bundle"):
+        files, notes = ADAPTERS[target](bundle)
+        assert files["requirements.txt"] == "humanize>=4\n"
+        assert any("requirements.txt" in n for n in notes)
+
+
+def test_agent_packs_without_packages_have_no_requirements_file(tmp_path):
+    engine = tmp_path / "engine.py"
+    engine.write_text(
+        'CAPABILITIES = [{"id": "p.size", "function": "size", "description": "d", "network": False, "writes_external_state": False}]\n'
+        "def size(n: int) -> str:\n    return str(n)\n", encoding="utf-8")
+    doc = {"spec_version": "0.1", "workflow": {"id": "plain_size", "name": "P", "inputs": {"n": {"type": "integer", "required": True}},
+           "steps": [{"id": "a", "capability": "p.size", "with": {"n": "{{ inputs.n }}"}}], "outputs": {"s": "{{ steps.a.outputs.result }}"}}}
+    files, _ = ADAPTERS["agent-pack"](build_bundle(doc, load_registry([tmp_path])))
+    assert "requirements.txt" not in files
 
 
 def test_agent_bundle_refuses_a_name_that_cannot_be_an_agent(setup):

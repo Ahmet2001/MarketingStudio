@@ -239,3 +239,33 @@ def test_python_engine_writes_into_its_step_folder(tmp_path):
     assert done.returncode == 0, done.stderr
     assert (work / "write" / "report.md").is_file()
     assert not (root / "report.md").exists()
+
+
+def test_short_file_paths_are_looked_up_inside_the_allowed_folders_only(tmp_path):
+    from studio import portable
+    root = (tmp_path / "inbox").resolve()
+    root.mkdir()
+    (root / "notes.txt").write_text("hello")
+    (root / "sub").mkdir()
+    (root / "sub" / "deep.txt").write_text("deep")
+    outside = tmp_path / "secret.txt"
+    outside.write_text("do not read")
+    policy = portable.FilePolicy(roots=[root])
+    dest = tmp_path / "dest"
+
+    assert portable.resolve_file("notes.txt", "source", dest, policy) == str(root / "notes.txt")
+    assert portable.resolve_file("sub/deep.txt", "source", dest, policy) == str(root / "sub" / "deep.txt")
+    assert portable.resolve_file(str(root / "notes.txt"), "source", dest, policy) == str(root / "notes.txt")
+
+    # leaving the folder is still refused, however the path is written
+    for sneaky in ("../secret.txt", "sub/../../secret.txt", str(outside)):
+        with pytest.raises(portable.RunError, match="allowed folders|does not exist"):
+            portable.resolve_file(sneaky, "source", dest, policy)
+
+    # a missing file says where files are read from, so a caller can correct itself
+    with pytest.raises(portable.RunError, match="does not exist.*" + str(root)):
+        portable.resolve_file("inbox/notes.txt", "source", dest, policy)
+
+    # without allowed folders a relative name is not guessed at all
+    with pytest.raises(portable.RunError, match="does not exist"):
+        portable.resolve_file("notes.txt", "source", dest, portable.FilePolicy())

@@ -203,6 +203,9 @@ def agent_pack(bundle: Bundle) -> tuple[dict[str, str], list[str]]:
         "env.example": "".join(f"{e}=\n" for e in env_names),
         "README.md": readme,
     }
+    if manifest["requires"].get("packages"):
+        # The pack format has no place for dependencies; this file is for whoever installs the pack.
+        files["requirements.txt"] = "".join(f"{p}\n" for p in bundle.requirements)
     notes = [
         "Install by hand on the agent's machine: /agent pack install <this folder>.",
         "The tool is a single synchronous function; the agent runs it in a worker thread with no time limit.",
@@ -215,7 +218,10 @@ def agent_pack(bundle: Bundle) -> tuple[dict[str, str], list[str]]:
         )
     notes += bundle.warnings
     if manifest["requires"].get("packages"):
-        notes.append("Install these Python packages in the agent's environment: " + ", ".join(manifest["requires"]["packages"]))
+        notes.append(
+            "Install these Python packages in the agent's environment (listed in requirements.txt): "
+            + ", ".join(manifest["requires"]["packages"])
+        )
     return files, notes
 
 

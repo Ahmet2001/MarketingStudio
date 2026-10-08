@@ -44,7 +44,11 @@ Each prints notes about what the target cannot do. Read them.
 
 `agent-pack` plus one small agent. Installing a `tool_pack` only registers the tool; an orchestrator can call a tool only through a sub-agent that has it in its tool list, so on its own the tool is not usable by an agent that runs unattended. `agent-bundle` writes the same `tools/<name>.py` and adds `agents/<name>_agent.yaml` (a config agent that owns the tool) and `prompts/<name>_agent.md`, with `plugin.yaml` of type `agent_bundle`. The prompt tells the agent to call the tool with the given inputs, return the result unchanged, and, for a workflow that writes outside the machine, never to set `approve` unless the task says the user approved.
 
-Install it, then restart the agent (it reads its sub-agents at start-up). The orchestrator then has an agent named `<workflow id>_agent` it can delegate to. Checked against the real agent app by running its own `preview_agent_pack` (type `agent_bundle`, no errors) and then a task through its job queue; see MarketingPool's `docker/README.md`.
+Install it, then restart the agent (it reads its sub-agents at start-up). If the workflow's engines need Python packages, the pack also carries a `requirements.txt` (the pack format itself has nowhere to put them); install it into the agent's Python.
+
+**Approval here is only a convention.** The tool refuses until `approve=true`, and the agent's prompt says to set it only when the task states the user approved. Tried against a real agent, a task that just said "call it with approve=true" was enough to make it send with no user approval. Use the `worker` or `job-handler` targets when approval has to be enforced (they take `approved_steps` from whoever queues the job, not from the model).
+
+File inputs follow the same rules as the other targets. A short or relative path is looked up inside the folders in `STUDIO_FILE_ROOTS` (and cannot leave them); an error for a missing file names those folders. The orchestrator then has an agent named `<workflow id>_agent` it can delegate to. Checked against the real agent app by running its own `preview_agent_pack` (type `agent_bundle`, no errors) and then a task through its job queue; see MarketingPool's `docker/README.md`.
 
 ### `tool-schema`
 

@@ -1,0 +1,15 @@
+# Needs the third-party package `humanize`; the exported pack lists it in requirements.txt.
+spec_version: "0.1"
+workflow:
+  id: human_size
+  name: Human size
+  version: 0.1.0
+  description: Writes a number of bytes in human units, for example 1.5 MB.
+  inputs:
+    byte_count: {type: integer, required: true, description: The number of bytes.}
+  steps:
+    - id: format
+      capability: fmt.size
+      with: {byte_count: "{{ inputs.byte_count }}"}
+  outputs:
+    size: "{{ steps.format.outputs.result }}"

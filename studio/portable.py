@@ -240,10 +240,27 @@ def resolve_file(value: Any, name: str, dest: Path, policy: FilePolicy) -> str:
             raise RunError(f"file input '{name}': asset references need an asset resolver, and none is configured.")
         return str(policy.asset_resolver(text[len("asset:"):]))
     path = Path(text).expanduser()
-    try:
-        resolved = path.resolve(strict=True)
-    except OSError as error:
-        raise RunError(f"file input '{name}': {text!r} does not exist.") from error
+    resolved = None
+    if not path.is_absolute() and not policy.allow_any_path:
+        # A caller (often a model) tends to give a short path. Look for it inside the allowed folders first.
+        # Anything that resolves outside a folder, for example with "..", is skipped, not followed.
+        for root in policy.roots:
+            candidate = (root / path)
+            try:
+                found = candidate.resolve(strict=True)
+            except OSError:
+                continue
+            if found.is_file() and found.is_relative_to(root):
+                resolved = found
+                break
+    if resolved is None:
+        try:
+            resolved = path.resolve(strict=True)
+        except OSError as error:
+            where = ""
+            if not policy.allow_any_path and policy.roots:
+                where = " Local files are read from: " + ", ".join(str(r) for r in policy.roots) + "."
+            raise RunError(f"file input '{name}': {text!r} does not exist.{where}") from error
     if not resolved.is_file():
         raise RunError(f"file input '{name}': {text!r} is not a file.")
     if not policy.allow_any_path and not any(resolved.is_relative_to(root) for root in policy.roots):
