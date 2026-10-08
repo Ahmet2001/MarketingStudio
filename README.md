@@ -203,13 +203,19 @@ Each component reads its own `.env`. Copy the `.env.example` next to it first (s
 
 Real `.env` files, generated media (`outputs/`, mp4, wav, mp3), `node_modules`, virtualenvs and runtime databases are git-ignored. Never commit API keys.
 
-## Roadmap
+## Scope and roadmap
 
-- Shared engine interface so every generator takes and returns the same shape
-- Extract the ad engine into [engines/product-ads](engines/product-ads)
-- Connect real image and video providers to the Product Ad Engine
-- Wire the connectors into Storyforge for automatic publishing
-- Use the local image engine as a drop-in replacement for Replicate
+**Today:** a person writes a workflow (or a single-file engine), checks it with `plan`, exports it, and moves the result to the server side where the agent or worker runs it. The Studio is used by people.
+
+**Future work, deliberately not started:** an agent that uses the Studio itself (discovering capabilities, composing and registering workflows on its own), a programmatic or MCP interface to the Studio, agent-assisted troubleshooting, budgets and approval policies. Nothing in the format blocks this: workflows, capabilities and bundles are plain structured files.
+
+**Next for the person-driven flow:**
+
+- Run a real engine (for example `story-video`) through `studio run` with real keys, to confirm its capability description
+- A bridge that reads the Marketing Assets toolbox manifests as capabilities
+- Install step and an MCP adapter for the exported tools
+- Make the connectors importable (they need a package that is not in this repository)
+- Shared engine interface for the older engines; real image and video providers for the Product Ad Engine
 
 ## Help
 
