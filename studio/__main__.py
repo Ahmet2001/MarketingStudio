@@ -9,7 +9,7 @@
     python -m studio new workflow FILE.yaml --id name --use CAPABILITY_ID [CAPABILITY_ID ...] [--sources DIR ...]
     python -m studio check [--sources DIR ...]
     python -m studio bundle workflow.yaml --out DIR [--sources DIR ...]
-    python -m studio adapt workflow.yaml --target agent-pack|tool-schema|job-handler|worker --out DIR [--sources DIR ...]
+    python -m studio adapt workflow.yaml --target agent-pack|tool-schema|job-handler|worker|mcp --out DIR [--sources DIR ...]
     python -m studio run workflow.yaml [--input name=value ...] [--approve STEP ...] [--workdir DIR]
 """
 

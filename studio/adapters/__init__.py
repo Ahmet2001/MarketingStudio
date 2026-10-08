@@ -13,6 +13,7 @@ from typing import Callable
 from ..bundle import Bundle
 from .agent_pack import agent_pack
 from .job_handler import job_handler
+from .mcp_server import mcp_server
 from .tool_schema import tool_schema
 from .worker import worker
 
@@ -23,6 +24,7 @@ ADAPTERS: dict[str, Adapter] = {
     "agent-pack": agent_pack,
     "job-handler": job_handler,
     "worker": worker,
+    "mcp": mcp_server,
 }
 
-__all__ = ["ADAPTERS", "Adapter", "agent_pack", "job_handler", "tool_schema", "worker"]
+__all__ = ["ADAPTERS", "Adapter", "agent_pack", "job_handler", "mcp_server", "tool_schema", "worker"]

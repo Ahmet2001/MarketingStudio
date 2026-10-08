@@ -190,3 +190,56 @@ def test_migration_matches_the_conventions(tmp_path):
                    "for update skip locked", "enable row level security", "grant insert (owner_ref, payload)"]:
         assert needle in sql, needle
     assert "claim_double_job_job" in sql
+
+
+def _talk(tmp_path, messages):
+    stdin = "".join(json.dumps(m) + "\n" for m in messages)
+    done = run([sys.executable, "-I", "server.py"], tmp_path, stdin=stdin)
+    assert done.returncode == 0, done.stderr
+    return [json.loads(line) for line in done.stdout.splitlines()]
+
+
+def test_mcp_server_speaks_the_protocol_and_gates_approval(tmp_path):
+    files, notes = ADAPTERS["mcp"](make(tmp_path))
+    assert {"server.py", "handler.py", "mcp.json", "README.md"} <= set(files)
+    assert any("stdio" in n for n in notes) and any("approve" in n for n in notes)
+    (tmp_path / "w").mkdir()
+    write(files, tmp_path / "w")
+    call = lambda i, args: {"jsonrpc": "2.0", "id": i, "method": "tools/call", "params": {"name": "double_job", "arguments": args}}
+    replies = _talk(tmp_path, [
+        {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-03-26", "capabilities": {}}},
+        {"jsonrpc": "2.0", "method": "notifications/initialized"},
+        {"jsonrpc": "2.0", "id": 2, "method": "ping"},
+        {"jsonrpc": "2.0", "id": 3, "method": "tools/list"},
+        call(4, {"n": 4}),
+        call(5, {"n": 4, "approve": "false"}),
+        call(6, {"n": 4, "approve": True}),
+        call(7, {"n": "x"}),
+        {"jsonrpc": "2.0", "id": 8, "method": "tools/call", "params": {"name": "other", "arguments": {}}},
+        {"jsonrpc": "2.0", "id": 9, "method": "nope"},
+    ])
+    by_id = {r["id"]: r for r in replies}
+    assert len(replies) == 9  # the notification got no answer
+    assert by_id[1]["result"]["protocolVersion"] == "2025-03-26"
+    assert by_id[2]["result"] == {}
+    tool = by_id[3]["result"]["tools"][0]
+    assert tool["name"] == "double_job" and "approve" in tool["inputSchema"]["properties"]
+    assert tool["inputSchema"]["required"] == ["n"] and tool["annotations"]["destructiveHint"] is True
+    text = lambda i: json.loads(by_id[i]["result"]["content"][0]["text"])
+    assert text(4)["status"] == "awaiting_approval"
+    assert text(5)["status"] == "awaiting_approval"  # the text 'false' is not approval
+    assert text(6)["status"] == "done" and text(6)["outputs"] == {"doubled": 8}
+    assert (tmp_path / "notified").read_text() == "8"  # written once, by the approved call only
+    assert text(7)["status"] == "awaiting_approval"  # gated steps are checked before inputs are parsed
+    assert by_id[8]["error"]["code"] == -32602 and by_id[9]["error"]["code"] == -32601
+
+
+def test_mcp_server_protects_stdout_and_survives_bad_lines(tmp_path):
+    files, _ = ADAPTERS["mcp"](make(tmp_path, gated=False))
+    (tmp_path / "w").mkdir()
+    write(files, tmp_path / "w")
+    done = run([sys.executable, "-I", "server.py"], tmp_path, stdin='not json\n[1]\n\n' + json.dumps(
+        {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "double_job", "arguments": {"n": 2}}}) + "\n")
+    lines = [json.loads(line) for line in done.stdout.splitlines()]
+    assert [l.get("error", {}).get("code") for l in lines[:2]] == [-32700, -32700]
+    assert json.loads(lines[2]["result"]["content"][0]["text"])["outputs"] == {"doubled": 4}

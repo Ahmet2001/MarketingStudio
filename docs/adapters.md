@@ -32,9 +32,10 @@ python -m studio adapt workflow.yaml --target agent-pack  --out ./pack   --sourc
 python -m studio adapt workflow.yaml --target tool-schema --out ./schema --sources ./my_tools
 python -m studio adapt workflow.yaml --target job-handler --out ./handler --sources ./my_tools
 python -m studio adapt workflow.yaml --target worker      --out ./worker  --sources ./my_tools
+python -m studio adapt workflow.yaml --target mcp         --out ./mcp     --sources ./my_tools
 ```
 
-The first two make the workflow a **tool** a model calls. The last two make it an **item a worker runs**: `job-handler` is one file you plug into a worker you already have, `worker` is a whole process that serves a queue.
+The first two, and `mcp`, make the workflow a **tool** a model calls. The last two make it an **item a worker runs**: `job-handler` is one file you plug into a worker you already have, `worker` is a whole process that serves a queue.
 
 Each prints notes about what the target cannot do. Read them.
 
@@ -62,6 +63,14 @@ result = handler.handle(job["payload"]["inputs"], approved_steps=job.get("approv
 From a worker in another language, run it as a process: `echo '{"inputs": {...}, "approved_steps": []}' | python handler.py` and read one JSON object from stdout.
 
 The result is `{"status": "done", "outputs": ..., "run_folder": ...}`, `{"status": "awaiting_approval", "gated_steps": [...]}` (nothing ran) or `{"status": "failed", "error": ...}`. **Approval is per step**: a step that writes to the outside world runs only when its id is in `approved_steps`.
+
+### `mcp`
+
+A folder: `server.py` (standard library only), `handler.py`, `mcp.json` and `README.md`. `server.py` is a Model Context Protocol server over **stdio**: an MCP client starts it as a command (`python server.py`) and sees one tool, named after the workflow, whose arguments are the workflow inputs. It is not an HTTP server.
+
+The tool returns one JSON text block with the handler's result (`done`, `awaiting_approval` or `failed`; `isError` is set on `failed`). Engines' `print` output goes to stderr so it cannot corrupt the protocol. Runs are synchronous: a long run blocks the server until it ends.
+
+Approval is the tool argument `approve`, the same convention as `agent-pack`: gated steps run only when it is `true` (the text `"false"` does not count), and the client has to respect that. For an enforced gate use `worker`.
 
 ### `worker`
 
