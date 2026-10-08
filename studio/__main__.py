@@ -4,6 +4,8 @@
     python -m studio validate workflow.yaml [--sources DIR ...] [--allow-unknown]
     python -m studio export workflow.yaml --out DIR [--sources DIR ...] [--allow-unknown]
     python -m studio check [--sources DIR ...]
+    python -m studio bundle workflow.yaml --out DIR [--sources DIR ...]
+    python -m studio adapt workflow.yaml --target agent-pack|tool-schema --out DIR [--sources DIR ...]
     python -m studio run workflow.yaml [--input name=value ...] [--approve STEP ...] [--workdir DIR]
 """
 
@@ -17,6 +19,8 @@ from datetime import datetime
 
 from .registry import RegistryError, default_sources, load_registry
 from .runner import RunError, run_workflow
+from .adapters import ADAPTERS
+from .bundle import BundleError, build_bundle
 from .workflow import WorkflowError, analyze, build_files, load_workflow
 
 
@@ -36,6 +40,15 @@ def main(argv: list[str] | None = None) -> int:
     p_export.add_argument("workflow", type=Path)
     p_export.add_argument("--out", type=Path, required=True)
     common(p_export)
+    p_bundle = sub.add_parser("bundle", help="Write a self-contained folder that runs without studio installed.")
+    p_bundle.add_argument("workflow", type=Path)
+    p_bundle.add_argument("--out", type=Path, required=True)
+    common(p_bundle)
+    p_adapt = sub.add_parser("adapt", help="Write the files one kind of consumer reads (writes files only, installs nothing).")
+    p_adapt.add_argument("workflow", type=Path)
+    p_adapt.add_argument("--target", choices=sorted(ADAPTERS), required=True)
+    p_adapt.add_argument("--out", type=Path, required=True)
+    common(p_adapt)
     p_check = sub.add_parser("check", help="Check capability files in the sources, including that the files they point to exist.")
     common(p_check)
     p_run = sub.add_parser("run", help="Run a workflow on this machine.")
@@ -68,6 +81,29 @@ def main(argv: list[str] | None = None) -> int:
     except WorkflowError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
+    if args.command in {"bundle", "adapt"}:
+        try:
+            bundle = build_bundle(doc, registry)
+            if args.command == "bundle":
+                files, notes = bundle.files(), bundle.warnings
+            else:
+                files, notes = ADAPTERS[args.target](bundle)
+        except WorkflowError as error:
+            for line in error.errors:
+                print(f"ERROR   {line}", file=sys.stderr)
+            return 1
+        except (BundleError, ValueError) as error:
+            print(f"error: {error}", file=sys.stderr)
+            return 1
+        for name, text in files.items():
+            path = args.out / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+        print(f"wrote {len(files)} files to {args.out}")
+        for line in notes:
+            print(f"note: {line}")
+        return 0
+
     if args.command == "run":
         analysis = analyze(doc, registry)
         if analysis.errors:
