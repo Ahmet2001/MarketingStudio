@@ -2,7 +2,7 @@
 
 # MarketingStudio
 
-**Ad creatives, story videos and documentary explainers in one toolkit.**
+**The factory: turn capabilities into workflows, and workflows into tools that an agent or a worker can run.**
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
 ![Express](https://img.shields.io/badge/Express-000000?style=for-the-badge&logo=express&logoColor=white)
@@ -21,15 +21,79 @@
 [![Last commit](https://img.shields.io/github/last-commit/Ahmet2001/MarketingStudio?style=flat-square)](https://github.com/Ahmet2001/MarketingStudio/commits/main)
 ![Repo size](https://img.shields.io/github/repo-size/Ahmet2001/MarketingStudio?style=flat-square)
 
-[The four apps](#the-four-applications-at-a-glance) · [How they fit together](#how-the-pieces-fit-together) · [Setup](#setup-requirements) · [Roadmap](#roadmap) · [Contributing](#contributing)
+[Big picture](#the-big-picture) · [How it works](#how-the-factory-works) · [Exports](#what-an-export-can-become) · [What ships with it](#what-ships-with-the-studio) · [Setup](#setup-requirements) · [Roadmap](#scope-and-roadmap) · [Contributing](#contributing)
 
 </div>
 
-MarketingStudio is a monorepo of four headless marketing tools (APIs and command-line engines, no web frontends) that were built separately and now live side by side. Each one solves a different part of the same problem: **making marketing content and getting it in front of people.**
+MarketingStudio is where capabilities are **made into new capabilities**. You write small engines (often one Python file), join them in a workflow of any shape, check it, run it locally to try it, and export it. The export is a neutral, self-contained bundle. Small adapters reshape the bundle for whoever will run it: an LLM agent, a queue worker, an MCP client.
 
-> **Read this first:** these are not one single app. They are independent applications with a shared folder layout. Only some of them talk to each other. The [How the pieces fit together](#how-the-pieces-fit-together) section shows exactly which.
+It is one part of a larger idea: fitting an LLM agent to a system. The Studio is the **factory** that makes the tools; [Ethgent](https://github.com/Ahmet2001/BrowserAgent) is the agent that uses them, [Marketing Agent Assets](https://github.com/Ahmet2001/MarketingPool/tree/main/marketing-agent-assets) is the open pool that connects the agent to a system, and [MarketingPool](https://github.com/Ahmet2001/MarketingPool) is the example where those meet. The reasoning is in the [main manifesto](https://github.com/Ahmet2001/MarketingPool/blob/main/manifesto.md).
 
-## The four applications at a glance
+The Studio depends on none of them. A workflow is not tied to the pool, and an exported workflow runs without the Studio installed.
+
+## The big picture
+
+Four repositories, one idea: **take an LLM agent and fit it to your own system.** None of them is a placeholder for another.
+
+| Repository | Role |
+| --- | --- |
+| [**Ethgent**](https://github.com/Ahmet2001/BrowserAgent) | The customisable agent. An orchestrator LLM, sub-agents and tools that live in YAML and packs. Today it is tuned for social media; the same shape can be tuned for trading, HR or any other domain. |
+| [**Marketing Agent Assets**](https://github.com/Ahmet2001/MarketingPool/tree/main/marketing-agent-assets) | The integration layer and an open pool. Workers, connectors, tools, schemas and decision guides that plug the agent into *your* system. Nobody owns "the" asset: anyone can add their own tool, connector or worker. |
+| [**MarketingStudio**](https://github.com/Ahmet2001/MarketingStudio) | The factory. Build a workflow once, export it (agent pack, MCP server, worker, ...) and feed it to the agent and the assets. |
+| [**MarketingPool**](https://github.com/Ahmet2001/MarketingPool) | One worked example: the agent and the assets together, with Docker, running on one machine. |
+
+```mermaid
+flowchart LR
+    S[MarketingStudio<br/>factory] -->|exports workflows, tools, packs| A
+    subgraph Pool[MarketingPool: an example]
+        E[Ethgent<br/>agent] <-->|requests, results| A[Marketing Agent Assets<br/>workers, connectors, tools]
+    end
+    A <-->|data in, content out| Y([Your system or app])
+```
+
+Once the agent and the assets are joined, the LLM gets feedback from the system (it can read your data) and can give something back (it can publish, or write into your app). Connected to your app, it can collect material from it, create content and publish it.
+
+## How the factory works
+
+Every engine and connector describes itself in a `capability.yaml` next to its code: what it does, its inputs and outputs, what it needs, whether it changes anything outside the machine (those require approval), and how to run it. See the [capability spec](docs/capability-spec.md).
+
+Your own engine can be one Python file with a `CAPABILITY` literal (inputs and outputs come from the function signature), so a whole system is two files: the engine and the workflow ([example](examples/single_file)). Workflows are files you write freely: any number of steps, branches and parallel steps, using any capability from any source. They are not tied to a fixed template or to the Marketing Assets Pool. The factory checks them and exports each one as a new capability:
+
+```bash
+pip install pyyaml
+python -m studio validate examples/workflows/parallel_videos.yaml
+python -m studio export examples/workflows/story_to_youtube.yaml --out ./exported
+python -m studio capabilities --sources ./my_tools ~/shared_pool     # any sources you choose
+python -m studio describe story.video.generate                      # what a capability takes, gives and needs
+python -m studio plan workflow.yaml --sources ./my_tools            # what a run would involve (runs nothing)
+python -m studio new engine my_tools/x.py --id team.x               # starting files
+python -m studio run workflow.yaml --sources ./my_tools --input topic="..."   # run it locally
+```
+
+Guide: [docs/workflows.md](docs/workflows.md). A workflow can also leave as a self-contained bundle (`python -m studio bundle`) and be reshaped for a consumer with `python -m studio adapt --target agent-pack|agent-bundle|tool-schema|job-handler|worker|mcp`; see [docs/adapters.md](docs/adapters.md). Check capability files from any folder with `python -m studio check --sources DIR`.
+
+An experimental, removable, read-only viewer lives in [ui/](ui/README.md) (`python -m ui`): list workflows and capabilities, and see what each export format produces.
+
+## What an export can become
+
+`python -m studio bundle` produces the neutral bundle. `python -m studio adapt --target <name>` reshapes it for one consumer. An adapter only writes files.
+
+| Target | For | Result |
+|---|---|---|
+| `agent-pack` | An agent app such as Ethgent | `plugin.yaml` and one self-contained tool file |
+| `agent-bundle` | The same, with a sub-agent that owns the tool | Pack plus agent config and prompt |
+| `tool-schema` | Any LLM function-calling setup | Tool definitions (Anthropic and OpenAI shapes) |
+| `job-handler` | A worker you already run | One `handler.py` |
+| `worker` | A standalone queue worker | File or Supabase queue, migration, Dockerfile, per-step approval |
+| `mcp` | Any MCP client | A stdio MCP server offering the workflow as a tool |
+
+A step that changes something outside the machine (publishing, for example) always needs approval, and the exports carry that rule with them. Details: [docs/adapters.md](docs/adapters.md).
+
+## What ships with the Studio
+
+The Studio comes with engines and connectors you can use as capabilities, or replace with your own. They were built separately and live side by side in this repository; they are independent applications with a shared folder layout, and only some of them talk to each other. Every component has its own dependencies and its own `.env`.
+
+### At a glance
 
 | # | Application | One-line purpose | You give it | You get | Status |
 |---|---|---|---|---|---|
@@ -39,7 +103,7 @@ MarketingStudio is a monorepo of four headless marketing tools (APIs and command
 | 4 | **[Local image engine](#4-local-image-engine)** | Generate images on your own GPU | A video idea | Storyboard frames (PNG) | Experimental |
 | + | **[Social connectors](#5-social-connectors)** | Search, post and reply on Reddit, X, Instagram, YouTube | Credentials, text, media | Published posts, research data | Library of toolboxes |
 
-## How the pieces fit together
+### How these parts fit together
 
 ```mermaid
 flowchart LR
@@ -62,7 +126,7 @@ flowchart LR
 - **Dotted arrows are not wired yet.** Connectors, the local image engine and the Product Ad Engine currently run on their own.
 - Every component has its own dependencies and its own `.env`. You can use any one of them without the rest.
 
-## What is inside
+### What is inside
 
 | Path | Part of | Stack |
 |---|---|---|
@@ -76,7 +140,7 @@ flowchart LR
 
 ---
 
-## 1. Product Ad Engine
+### 1. Product Ad Engine
 
 **Location:** [engines/product-ads](engines/product-ads) · Full guide: [engines/product-ads/README.md](engines/product-ads/README.md)
 
@@ -96,7 +160,7 @@ npm install
 npm run dev        # API http://127.0.0.1:8787, health at /api/health
 ```
 
-## 2. Storyforge (story and documentary video API)
+### 2. Storyforge (story and documentary video API)
 
 **Location:** [apps/studio-api](apps/studio-api) · Full guide: [docs/storyforge.md](docs/storyforge.md)
 
@@ -113,7 +177,7 @@ An API that puts the [video engines](#3-video-engines) behind one interface. Ins
 docker compose up --build      # API at http://localhost:8000 (docs at /docs), Redis, worker, scheduler
 ```
 
-## 3. Video engines
+### 3. Video engines
 
 These two command-line tools do the actual work behind Storyforge, and they also run on their own. Both take a topic and produce a vertical 1080x1920 MP4 with narration and captions.
 
@@ -137,7 +201,7 @@ python main.py "A taxi driver receives a request from an abandoned town" --durat
 
 Documentary example: `python main.py "The 2001 financial crisis in Turkey" --duration 45 --scenes 7` inside [engines/documentary-video](engines/documentary-video). Output lands in `outputs/<timestamp>/`.
 
-## 4. Local image engine
+### 4. Local image engine
 
 **Location:** [engines/local-image](engines/local-image)
 
@@ -153,7 +217,7 @@ python story_image_pipeline.py --idea "An AI student's first day" --out outputs/
 
 **Honest status:** experimental, not connected to Storyforge yet. The long-term idea is to replace the paid Replicate step in the story engine.
 
-## 5. Social connectors
+### 5. Social connectors
 
 **Location:** [connectors](connectors)
 
@@ -169,27 +233,6 @@ Large toolboxes (roughly 8,000 lines in total) for working with social platforms
 Use them for low-volume, supervised work and follow each platform's terms and rate limits. `connectors/main.py` is an agent entry point that imports a `MarketingApp` package which is not in this repository yet, so it does not run as-is. The toolboxes import `.araclar.browser_araclari` (and need `selenium`), a package that lives on the server side and not in this repository. Here they are definitions: you can write workflows with them and validate, plan and export, and they run where the toolboxes are installed.
 
 ---
-
-## Capabilities and workflows
-
-Every engine and connector describes itself in a `capability.yaml` next to its code: what it does, its inputs and outputs, what it needs, whether it changes anything outside the machine (those require approval), and how to run it. See the [capability spec](docs/capability-spec.md).
-
-Your own engine can be one Python file with a `CAPABILITY` literal (inputs and outputs come from the function signature), so a whole system is two files: the engine and the workflow ([example](examples/single_file)). Workflows are files you write freely: any number of steps, branches and parallel steps, using any capability from any source. They are not tied to a fixed template or to the Marketing Assets Pool. The factory checks them and exports each one as a new capability:
-
-```bash
-pip install pyyaml
-python -m studio validate examples/workflows/parallel_videos.yaml
-python -m studio export examples/workflows/story_to_youtube.yaml --out ./exported
-python -m studio capabilities --sources ./my_tools ~/shared_pool     # any sources you choose
-python -m studio describe story.video.generate                      # what a capability takes, gives and needs
-python -m studio plan workflow.yaml --sources ./my_tools            # what a run would involve (runs nothing)
-python -m studio new engine my_tools/x.py --id team.x               # starting files
-python -m studio run workflow.yaml --sources ./my_tools --input topic="..."   # run it locally
-```
-
-Guide: [docs/workflows.md](docs/workflows.md). A workflow can also leave as a self-contained bundle (`python -m studio bundle`) and be reshaped for a consumer with `python -m studio adapt --target agent-pack|agent-bundle|tool-schema|job-handler|worker|mcp`; see [docs/adapters.md](docs/adapters.md). Check capability files from any folder with `python -m studio check --sources DIR`.
-
-An experimental, removable, read-only viewer lives in [ui/](ui/README.md) (`python -m ui`): list workflows and capabilities, and see what each export format produces.
 
 ## Setup requirements
 
@@ -211,13 +254,12 @@ Real `.env` files, generated media (`outputs/`, mp4, wav, mp3), `node_modules`, 
 
 **Future work, deliberately not started:** an agent that uses the Studio itself (discovering capabilities, composing and registering workflows on its own), a programmatic or MCP interface to the Studio, agent-assisted troubleshooting, budgets and approval policies. Nothing in the format blocks this: workflows, capabilities and bundles are plain structured files.
 
-**Next for the person-driven flow:**
+**Not done yet in the person-driven flow:**
 
-- Run a real engine (for example `story-video`) through `studio run` with real keys, to confirm its capability description
-- A bridge that reads the Marketing Assets toolbox manifests as capabilities
-- Install step and an MCP adapter for the exported tools
-- Make the connectors importable (they need a package that is not in this repository)
-- Shared engine interface for the older engines; real image and video providers for the Product Ad Engine
+- Real keys have not been run through `story-video` and `documentary-video` via `studio run`, so their capability descriptions are unconfirmed against real output
+- The connectors are definitions only until they are importable (they need a package that is not in this repository)
+- A shared engine interface for the older engines; real image and video providers for the Product Ad Engine
+- Approvals do not travel over the `mcp` export: a workflow that needs approval is refused there
 
 ## Help
 
