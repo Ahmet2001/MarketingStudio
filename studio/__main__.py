@@ -3,6 +3,10 @@
     python -m studio capabilities [--sources DIR ...]
     python -m studio validate workflow.yaml [--sources DIR ...] [--allow-unknown]
     python -m studio export workflow.yaml --out DIR [--sources DIR ...] [--allow-unknown]
+    python -m studio describe CAPABILITY_ID [--sources DIR ...]
+    python -m studio plan workflow.yaml [--sources DIR ...] [--json]
+    python -m studio new engine FILE.py --id team.thing [--description TEXT]
+    python -m studio new workflow FILE.yaml --id name --use CAPABILITY_ID [CAPABILITY_ID ...] [--sources DIR ...]
     python -m studio check [--sources DIR ...]
     python -m studio bundle workflow.yaml --out DIR [--sources DIR ...]
     python -m studio adapt workflow.yaml --target agent-pack|tool-schema|job-handler|worker --out DIR [--sources DIR ...]
@@ -17,7 +21,9 @@ from pathlib import Path
 
 from datetime import datetime
 
+from .views import describe_capability, format_plan, plan_workflow
 from .registry import RegistryError, default_sources, load_registry
+from .scaffold import new_engine, new_workflow
 from .runner import RunError, run_workflow
 from .adapters import ADAPTERS
 from .bundle import BundleError, build_bundle
@@ -29,7 +35,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
 
     def common(p: argparse.ArgumentParser) -> None:
-        p.add_argument("--sources", nargs="+", type=Path, help="Directories or capability.yaml files. Default: $STUDIO_CAPABILITY_SOURCES, else this repository.")
+        p.add_argument("--sources", nargs="+", action="extend", type=Path, help="Directories or capability.yaml files. Default: $STUDIO_CAPABILITY_SOURCES, else this repository.")
         p.add_argument("--allow-unknown", action="store_true", help="Allow steps whose capability is not in the registry yet.")
 
     common(sub.add_parser("capabilities", help="List the capabilities found in the sources."))
@@ -49,6 +55,24 @@ def main(argv: list[str] | None = None) -> int:
     p_adapt.add_argument("--target", choices=sorted(ADAPTERS), required=True)
     p_adapt.add_argument("--out", type=Path, required=True)
     common(p_adapt)
+    p_describe = sub.add_parser("describe", help="Show what a capability takes, gives, needs and may do.")
+    p_describe.add_argument("capability")
+    common(p_describe)
+    p_plan = sub.add_parser("plan", help="Show what running a workflow would involve and whether this machine is ready. Runs nothing.")
+    p_plan.add_argument("workflow", type=Path)
+    p_plan.add_argument("--json", action="store_true")
+    common(p_plan)
+    p_new = sub.add_parser("new", help="Write a starting file.")
+    new_sub = p_new.add_subparsers(dest="what", required=True)
+    n_engine = new_sub.add_parser("engine", help="A single-file engine.")
+    n_engine.add_argument("file", type=Path)
+    n_engine.add_argument("--id", required=True, dest="cid")
+    n_engine.add_argument("--description", default="Describe what this engine does.")
+    n_flow = new_sub.add_parser("workflow", help="A workflow that runs the given capabilities in order.")
+    n_flow.add_argument("file", type=Path)
+    n_flow.add_argument("--id", required=True, dest="wid")
+    n_flow.add_argument("--use", nargs="+", required=True, metavar="CAPABILITY_ID")
+    common(n_flow)
     p_check = sub.add_parser("check", help="Check capability files in the sources, including that the files they point to exist.")
     common(p_check)
     p_run = sub.add_parser("run", help="Run a workflow on this machine.")
@@ -60,11 +84,39 @@ def main(argv: list[str] | None = None) -> int:
     common(p_run)
     args = parser.parse_args(argv)
 
+    if args.command == "new" and args.what == "engine":
+        try:
+            function = new_engine(args.file, args.cid, args.description)
+        except (FileExistsError, ValueError) as error:
+            print(f"error: {error}", file=sys.stderr)
+            return 1
+        print(f"wrote {args.file}  (function {function}). Edit it, then: python -m studio describe {args.cid} --sources {args.file.parent}")
+        return 0
+
     try:
         registry = load_registry(args.sources, check_paths=args.command == "check")
     except RegistryError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
+
+    if args.command == "describe":
+        if args.capability not in registry:
+            near = [c for c in registry if args.capability.lower() in c.lower()]
+            print(f"error: no capability '{args.capability}'." + (f" Did you mean: {', '.join(near)}?" if near else ""), file=sys.stderr)
+            return 1
+        print(describe_capability(registry[args.capability], registry.origin[args.capability]))
+        return 0
+
+    if args.command == "new":
+        try:
+            doc, notes = new_workflow(args.file, args.wid, args.use, registry)
+        except (FileExistsError, ValueError) as error:
+            print(f"error: {error}", file=sys.stderr)
+            return 1
+        print(f"wrote {args.file}")
+        for line in notes:
+            print(f"  {line}")
+        return 0
 
     if args.command == "check":
         print(f"{len(registry)} capabilities from {len(args.sources or default_sources())} source(s), no problems.")
@@ -81,6 +133,12 @@ def main(argv: list[str] | None = None) -> int:
     except WorkflowError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
+    if args.command == "plan":
+        plan = plan_workflow(doc, registry, allow_unknown=args.allow_unknown)
+        import json as _json
+        print(_json.dumps(plan, indent=2, default=str) if args.json else format_plan(plan))
+        return 1 if plan["errors"] else (3 if plan["missing"] else 0)
+
     if args.command in {"bundle", "adapt"}:
         try:
             bundle = build_bundle(doc, registry)

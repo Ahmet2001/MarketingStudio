@@ -64,6 +64,24 @@ def word_count(source: Path) -> int:
 - The file is read as text and is never executed when the factory loads it, so adding a source cannot run anyone's code. It only runs when a workflow that uses it runs.
 - Several files with the same name (`engine.py`) in different folders are fine.
 
+## Look before you run
+
+```bash
+python -m studio describe story.video.generate     # what it takes, gives, needs and may do
+python -m studio plan workflow.yaml --sources ./my_tools   # what running it would involve; runs nothing
+```
+
+`plan` lists the steps in the order they would run, which need approval, the cost it can add up and for which steps it is unknown, and whether **this machine** has what the steps need (environment variables, programs, Python packages). It exits with 0 when ready, 3 when something is missing and 1 when the workflow is not valid; `--json` gives the same thing for other programs.
+
+## Starting files
+
+```bash
+python -m studio new engine my_tools/summarize.py --id team.summarize
+python -m studio new workflow flow.yaml --id my_flow --use team.word_count team.headline --sources my_tools
+```
+
+`new engine` writes a valid single-file engine to edit. `new workflow` writes a workflow that runs the capabilities you name in order, wiring an input to an earlier output only when the choice is unambiguous (same name, or the only output of that type); everything else becomes a workflow input, and it prints what it connected. Neither command overwrites an existing file.
+
 ## Where capabilities come from
 
 Anywhere you say. A source is a directory (searched for `capability.yaml` files and single-file engines) or a single file, and you can combine as many as you like:

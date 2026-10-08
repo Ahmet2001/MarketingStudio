@@ -181,6 +181,9 @@ pip install pyyaml
 python -m studio validate examples/workflows/parallel_videos.yaml
 python -m studio export examples/workflows/story_to_youtube.yaml --out ./exported
 python -m studio capabilities --sources ./my_tools ~/shared_pool     # any sources you choose
+python -m studio describe story.video.generate                      # what a capability takes, gives and needs
+python -m studio plan workflow.yaml --sources ./my_tools            # what a run would involve (runs nothing)
+python -m studio new engine my_tools/x.py --id team.x               # starting files
 python -m studio run workflow.yaml --sources ./my_tools --input topic="..."   # run it locally
 ```
 
