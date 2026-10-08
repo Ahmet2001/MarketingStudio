@@ -23,3 +23,6 @@ gameplay/
 *.mp4
 *.wav
 *.mp3
+
+# outputs of `studio run` and the editor
+runs/
