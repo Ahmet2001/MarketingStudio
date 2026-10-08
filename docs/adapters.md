@@ -67,6 +67,17 @@ A step that writes to the outside world needs approval. In a bundle run, name th
 
 `STUDIO_TOOL_HOME` (default: the system temp folder, `studio_tools/`). Each call has its own run folder, returned as `run_folder`.
 
+## Your own libraries (torch, anything)
+
+Your engines can import whatever is installed where they run. `portable.py` itself needs only the standard library; that limit does not apply to engines.
+
+- **Python engines** run in the same Python as the runner (for an agent pack, the agent's Python). Install their libraries there.
+- **Command-line engines** run the command in their capability file. A bare `python` or `python3` there means the machine's default Python; set `STUDIO_PYTHON=/path/to/venv/bin/python` to make every bare `python` command use another interpreter (for example a virtual environment that has torch).
+- Declare what an engine needs: `"packages": ["torch>=2.1"]` (or `requires.packages` in a `capability.yaml`). Before any step runs, the runner checks each package is installed for the interpreter that will use it and stops with a message naming the missing ones. Only the presence of the package is checked, not its version.
+- Studio never installs packages. Declared packages are listed in the bundle's `requirements.txt` and in the pack README.
+- Import heavy libraries inside the function, so merely reading or checking the engine file never loads them.
+- Model weights are not copied into a bundle; only the engine's source is.
+
 ## Not done yet
 
 An MCP adapter, a `job-spec` adapter for a queue-based runtime, and an install step. Packaging nested workflows. Parallel steps.

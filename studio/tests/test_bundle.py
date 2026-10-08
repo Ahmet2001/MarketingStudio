@@ -19,7 +19,7 @@ from pathlib import Path
 
 CAPABILITIES = [
     {"id": "t.size", "function": "size", "description": "File size.", "network": False, "writes_external_state": False,
-     "packages": ["requests"]},
+     "packages": ["PyYAML"]},
     {"id": "t.send", "function": "send", "description": "Sends a message.", "network": True, "writes_external_state": True},
 ]
 
@@ -67,8 +67,8 @@ def test_bundle_contents_and_manifest(setup):
     assert set(bundle.files()) >= {"manifest.json", "workflow.json", "capabilities.json", "bases.json", "portable.py", "requirements.txt"}
     assert len(bundle.engines) == 2 or len(bundle.engines) == 1
     assert bundle.manifest["gated_steps"] == [{"step": "report", "capability": "t.send"}]
-    assert bundle.manifest["requires"]["packages"] == ["requests"]
-    assert bundle.files()["requirements.txt"] == "requests\n"
+    assert bundle.manifest["requires"]["packages"] == ["PyYAML"]
+    assert bundle.files()["requirements.txt"] == "PyYAML\n"
     assert bundle.manifest["external"] == []
 
 

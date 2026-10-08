@@ -100,7 +100,7 @@ python -m studio run workflow.yaml --sources ./my_tools ./engines --input topic=
 ```
 
 - Each step gets its own folder under the workdir, with a `step.log` for command-line capabilities.
-- It checks required environment variables and programs for every step **before** starting.
+- It checks required environment variables, programs and Python packages (`requires.packages`) for every step **before** starting, so a missing library stops the run before anything costly has happened. Python engines run in the same Python as the runner, so the package must be installed there. A command-line engine is checked with the Python its command uses.
 - A step that writes to the outside world is **not run** unless approved: name it with `--approve STEP`, use `--approve-all`, or answer the prompt in a terminal. Without approval the run stops before that step.
 - It can execute `cli`, `python` and `workflow` capabilities. `http` capabilities are not supported by the local runner and fail with a clear message.
 - A command-line capability's output is the newest file matching its pattern. `exclude` names files or folders to ignore, and `**` searches subfolders.

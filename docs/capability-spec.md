@@ -36,7 +36,8 @@ capabilities:
     requires:
       env: [GEMINI_API_KEY]           # environment variables / credentials
       binaries: [ffmpeg]              # programs on PATH
-      hardware: []                    # e.g. cuda-gpu
+      hardware: []                    # e.g. cuda-gpu (recorded, not checked)
+      packages: []                    # optional: Python packages, e.g. ["torch>=2.1"]; presence is checked before a run
     permissions:
       network: true                   # calls external services
       writes_external_state: false    # posts, sends, uploads, edits remote data

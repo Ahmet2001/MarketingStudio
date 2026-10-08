@@ -182,3 +182,45 @@ def test_check_paths_catches_missing_files(tmp_path):
     load_registry([folder])  # structure is fine
     with pytest.raises(RegistryError, match="not found"):
         load_registry([folder], check_paths=True)
+
+
+def test_missing_python_package_stops_the_run_before_any_step(tmp_path, monkeypatch):
+    from studio.portable import missing_packages, package_names
+
+    folder = tmp_path / "pk"
+    folder.mkdir()
+    (folder / "engine.py").write_text(
+        'CAPABILITY = {"id": "pk.go", "description": "d", "network": False, "writes_external_state": False,\n'
+        '              "packages": ["definitely-not-installed-xyz>=1.0", "PyYAML"]}\n'
+        "def go(text: str) -> str:\n"
+        "    open(__import__('os').environ['MARK'], 'w').write('ran')\n    return text\n",
+        encoding="utf-8",
+    )
+    mark = tmp_path / "mark"
+    monkeypatch.setenv("MARK", str(mark))
+    reg = load_registry([folder])
+    doc = wf([{"id": "a", "capability": "pk.go", "with": {"text": "x"}}])
+    with pytest.raises(RunError, match=r"definitely-not-installed-xyz"):
+        run_workflow(doc, reg, {}, tmp_path / "r")
+    assert not mark.exists()  # nothing ran
+    assert package_names(["torch>=2.1", "requests[security]", "torch"]) == ["torch", "requests"]
+    assert missing_packages(["PyYAML", "definitely-not-installed-xyz"]) == ["definitely-not-installed-xyz"]
+
+
+def test_cli_packages_are_checked_in_the_interpreter_it_will_use(tools, tmp_path, monkeypatch):
+    reg = load_registry([tools])
+    reg["t.shout"]["requires"]["packages"] = ["definitely-not-installed-xyz"]
+    doc = wf([{"id": "a", "capability": "t.shout", "with": {"text": "x"}}])
+    with pytest.raises(RunError, match=r"definitely-not-installed-xyz.*installed for"):
+        run_workflow(doc, reg, {}, tmp_path / "r")
+
+
+def test_studio_python_replaces_a_bare_python_command(tools, tmp_path, monkeypatch):
+    reg = load_registry([tools])
+    reg["t.shout"]["execution"]["command"] = ["python3", "shout.py"]
+    monkeypatch.setenv("PATH", "/nonexistent")
+    doc = wf([{"id": "a", "capability": "t.shout", "with": {"text": "hi"}}], outputs={"o": "{{ steps.a.outputs.shouted }}"})
+    with pytest.raises(RunError, match="could not start"):
+        run_workflow(doc, reg, {}, tmp_path / "r1")
+    monkeypatch.setenv("STUDIO_PYTHON", PY)
+    assert run_workflow(doc, reg, {}, tmp_path / "r2").outputs["o"] == "HI"

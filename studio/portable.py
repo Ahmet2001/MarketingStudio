@@ -25,6 +25,7 @@ import base64
 import binascii
 import glob
 import importlib
+import importlib.metadata
 import importlib.util
 import ipaddress
 import json
@@ -276,7 +277,7 @@ def _base_for(cap: dict[str, Any], bases: dict[str, Path]) -> Path:
 
 def _run_cli(cap: dict[str, Any], base: Path, values: dict[str, Any], step_dir: Path) -> dict[str, Any]:
     ex = cap["execution"]
-    argv = [str(part) for part in ex["command"]]
+    argv = [str(part) for part in python_command(ex["command"])]
     for name in ex.get("positional") or []:
         if values.get(name) not in (None, ""):
             argv.append(str(values[name]))
@@ -363,6 +364,63 @@ def _run_python(cap: dict[str, Any], base: Path, values: dict[str, Any]) -> dict
     return {name: str(value) if isinstance(value, Path) else value for name, value in found.items()}
 
 
+PACKAGE_NAME_RE = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
+PACKAGE_CHECK = (
+    "import importlib.metadata as m, json, sys\n"
+    "missing = []\n"
+    "for name in json.loads(sys.argv[1]):\n"
+    "    try:\n"
+    "        m.distribution(name)\n"
+    "    except m.PackageNotFoundError:\n"
+    "        missing.append(name)\n"
+    "print(json.dumps(missing))\n"
+)
+
+
+def package_names(requirements: list[str]) -> list[str]:
+    """``["torch>=2.1", "requests[security]"]`` -> ``["torch", "requests"]``."""
+
+    names = []
+    for item in requirements:
+        match = PACKAGE_NAME_RE.match(str(item))
+        if match and match.group(1) not in names:
+            names.append(match.group(1))
+    return names
+
+
+def python_command(command: list[str]) -> list[str]:
+    """Use $STUDIO_PYTHON in place of a bare ``python`` / ``python3`` command."""
+
+    override = os.environ.get("STUDIO_PYTHON")
+    if override and command and command[0] in {"python", "python3"}:
+        return [override, *command[1:]]
+    return list(command)
+
+
+def missing_packages(names: list[str], interpreter: str | None = None) -> list[str] | None:
+    """Which packages are not installed, as seen by ``interpreter`` (default: this one).
+
+    Returns None when another interpreter could not be asked.
+    """
+
+    if interpreter is None:
+        missing = []
+        for name in names:
+            try:
+                importlib.metadata.distribution(name)
+            except importlib.metadata.PackageNotFoundError:
+                missing.append(name)
+        return missing
+    try:
+        done = subprocess.run(
+            [interpreter, "-c", PACKAGE_CHECK, json.dumps(names)],
+            capture_output=True, text=True, timeout=60,
+        )
+        return list(json.loads(done.stdout.strip().splitlines()[-1])) if done.returncode == 0 else None
+    except (OSError, ValueError, IndexError, subprocess.TimeoutExpired):
+        return None
+
+
 def order_steps(steps: list[dict[str, Any]]) -> list[str]:
     """Dependency order, keeping declaration order among independent steps."""
 
@@ -426,6 +484,16 @@ def run(
         needed += [b for b in (cap.get("requires") or {}).get("binaries", []) if not shutil.which(b)]
         if needed:
             missing.append(f"step '{sid}' needs {', '.join(needed)}")
+        names = package_names((cap.get("requires") or {}).get("packages", []))
+        if names:
+            execution = cap["execution"]
+            interpreter = python_command(execution["command"])[0] if execution["type"] == "cli" else None
+            absent = missing_packages(names, interpreter)
+            if absent is None:
+                log(f"[{sid}] could not check Python packages with {interpreter}; continuing")
+            elif absent:
+                where = f" for {interpreter}" if interpreter else ""
+                missing.append(f"step '{sid}' needs Python package(s) {', '.join(absent)} installed{where}")
     if missing:
         raise RunError("missing before starting: " + "; ".join(missing))
 

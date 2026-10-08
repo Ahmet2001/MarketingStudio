@@ -54,6 +54,9 @@ def check_capability(
     for key in ("env", "binaries", "hardware"):
         if not isinstance((cap.get("requires") or {}).get(key), list):
             errors.append(f"{where}: requires.{key} must be a list")
+    packages = (cap.get("requires") or {}).get("packages", [])
+    if not isinstance(packages, list) or not all(isinstance(p, str) for p in packages):
+        errors.append(f"{where}: requires.packages must be a list of package names")
     perms = cap.get("permissions") or {}
     for key in ("network", "writes_external_state", "requires_approval"):
         if not isinstance(perms.get(key), bool):
