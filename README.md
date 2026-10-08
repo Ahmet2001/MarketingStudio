@@ -170,6 +170,15 @@ Use them for low-volume, supervised work and follow each platform's terms and ra
 
 ---
 
+## Capabilities
+
+Every engine and connector describes itself in a `capability.yaml` next to its code: what it does, its inputs and outputs, what it needs, whether it changes anything outside the machine (those require approval), and how to run it. The files do not change how the code runs. See the [capability spec](docs/capability-spec.md) and validate them with:
+
+```bash
+pip install pyyaml
+python scripts/validate_capabilities.py
+```
+
 ## Setup requirements
 
 - Node.js 20+ for the Product Ad Engine

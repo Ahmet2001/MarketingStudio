@@ -1,0 +1,64 @@
+spec_version: "0.1"
+capabilities:
+  - id: story.video.generate
+    version: 0.1.0
+    title: Story video
+    description: Turns one topic into a narrated vertical (1080x1920) story video with captions, using AI scene images or gameplay footage.
+    status: working
+    inputs:
+      topic:
+        {type: text, required: true, description: The story topic or premise.}
+      niche:
+        {type: text, description: "Built-in niche profile id or path to a custom niche JSON file."}
+      language:
+        {type: text, default: English, description: Narration language.}
+      duration:
+        {type: integer, default: 45, description: Approximate narration length in seconds.}
+      scenes:
+        {type: integer, default: 7, description: Number of scenes.}
+      image_provider:
+        {type: enum, values: [replicate, fal, together, gemini], default: replicate, description: Image generation provider. Not used in video game mode.}
+      video_game_mode:
+        {type: boolean, default: false, description: Use gameplay footage instead of generated images, with word-highlight captions.}
+      skip_research:
+        {type: boolean, default: false}
+      seed:
+        {type: integer, default: 12345}
+    outputs:
+      video: {type: "file:mp4", description: The finished 1080x1920 video.}
+      story: {type: "file:json", description: Script and scene prompts (story.json).}
+      research: {type: "file:json", description: Sources used for the script (research.json).}
+    requires:
+      env: [GEMINI_API_KEY, ELEVENLABS_API_KEY, REPLICATE_API_TOKEN]
+      binaries: [ffmpeg, ffprobe]
+      hardware: []
+    permissions:
+      network: true
+      writes_external_state: false
+      requires_approval: false
+    cost:
+      estimate_usd: null
+      notes: Not measured. Spends Gemini, ElevenLabs and image-provider credits per run. REPLICATE_API_TOKEN is not needed in video game mode.
+    execution:
+      type: cli
+      cwd: engines/story-video
+      command: [python, main.py]
+      positional: [topic]
+      flags:
+        niche: --niche
+        language: --language
+        duration: --duration
+        scenes: --scenes
+        image_provider: --image-provider
+        video_game_mode: --video-game-mode
+        skip_research: --skip-research
+        seed: --seed
+      output_dir_flag: --output-dir
+      outputs:
+        video: "{output_dir}/*.mp4"
+        story: "{output_dir}/story.json"
+        research: "{output_dir}/research.json"
+    failure_modes:
+      - Missing API key stops the run before any media is produced.
+      - Provider throttling and timeouts are retried (--api-attempts), then the run fails.
+      - "{output_dir} also contains joined.mp4 and intermediate clips; pick the file named after the story slug."

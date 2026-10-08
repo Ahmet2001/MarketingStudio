@@ -1,0 +1,83 @@
+spec_version: "0.1"
+capabilities:
+  - id: ad.creative.generate
+    version: 0.1.0
+    title: Product ad creative
+    description: Creates a project and a queued generation of ad creatives from a creation tool, a brief and an optional product image. Poll the generation until it completes.
+    status: experimental
+    inputs:
+      toolId:
+        {type: text, required: true, description: "Creation tool id from the tool catalog (for example ai-cover, ugc-video, campaign-kit)."}
+      choice:
+        {type: text, required: true, description: Style or option chosen for the tool.}
+      prompt:
+        {type: text, default: "", description: Brief, up to 1000 characters.}
+      title:
+        {type: text, description: Project title, up to 160 characters.}
+      uploadId:
+        {type: text, description: Id returned by the upload operation for the product image.}
+    outputs:
+      generation: {type: object, description: Generation record with status, usage, estimated cost and output files.}
+    requires:
+      env: []
+      binaries: []
+      hardware: []
+    permissions:
+      network: false
+      writes_external_state: false
+      requires_approval: false
+    cost:
+      estimate_usd: 0
+      notes: The default local provider draws SVG mockups at zero cost. Real image or video providers are configured through the model-provider settings and are not wired by default.
+    execution:
+      type: http
+      base_url: "http://127.0.0.1:8787"
+      operations:
+        - {name: upload, method: POST, path: /api/uploads}
+        - {name: create, method: POST, path: /api/generations}
+        - {name: poll, method: GET, path: "/api/generations/{id}"}
+    failure_modes:
+      - Unknown toolId returns 400.
+      - Output is placeholder SVG until a real provider adapter is configured.
+
+  - id: ad.creative.revise
+    version: 0.1.0
+    title: Revise a generation
+    description: Creates a saved child revision of an existing generation from a change request.
+    status: experimental
+    inputs:
+      id: {type: text, required: true, description: Parent generation id.}
+      changeRequest: {type: text, required: true}
+    outputs:
+      generation: {type: object}
+    requires: {env: [], binaries: [], hardware: []}
+    permissions: {network: false, writes_external_state: false, requires_approval: false}
+    cost: {estimate_usd: 0, notes: Same provider cost as the parent generation.}
+    execution:
+      type: http
+      base_url: "http://127.0.0.1:8787"
+      operations:
+        - {name: revise, method: POST, path: "/api/generations/{id}/revisions"}
+    failure_modes:
+      - Unknown parent generation returns 404.
+
+  - id: ad.creative.approve
+    version: 0.1.0
+    title: Approve a creative
+    description: Marks a generation, or one of its outputs, as approved.
+    status: experimental
+    inputs:
+      id: {type: text, required: true, description: Generation id.}
+      outputId: {type: text, description: Specific output to approve.}
+    outputs:
+      generation: {type: object}
+    requires: {env: [], binaries: [], hardware: []}
+    permissions: {network: false, writes_external_state: false, requires_approval: false}
+    cost: {estimate_usd: 0, notes: No generation cost.}
+    execution:
+      type: http
+      base_url: "http://127.0.0.1:8787"
+      operations:
+        - {name: approve, method: POST, path: "/api/generations/{id}/approve"}
+    failure_modes:
+      - Unknown generation returns 404.

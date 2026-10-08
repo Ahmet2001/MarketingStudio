@@ -1,0 +1,59 @@
+spec_version: "0.1"
+capabilities:
+  - id: image.storyboard.local
+    version: 0.1.0
+    title: Local storyboard images
+    description: Writes a five-frame storyboard from a video idea with a local Ollama model, then renders each frame with Stable Diffusion 1.5 on a local GPU. No cloud keys needed.
+    status: experimental
+    inputs:
+      idea:
+        {type: text, required: true, description: The video idea. A local LLM writes the five-frame storyboard from it.}
+      ollama_model:
+        {type: text, default: "llama3.1:8b"}
+      sd_model:
+        {type: text, default: stable-diffusion-v1-5/stable-diffusion-v1-5}
+      width:
+        {type: integer, default: 512}
+      height:
+        {type: integer, default: 768}
+      steps:
+        {type: integer, default: 28}
+      guidance:
+        {type: number, default: 7.5}
+      seed:
+        {type: integer, default: 42}
+    outputs:
+      frames: {type: "list", description: "frame_01.png to frame_05.png in the output directory."}
+      plan: {type: "file:json", description: Storyboard plan (story_plan.json).}
+    requires:
+      env: []
+      binaries: []
+      hardware: [cuda-gpu]
+    permissions:
+      network: false
+      writes_external_state: false
+      requires_approval: false
+    cost:
+      estimate_usd: 0
+      notes: Runs on local hardware; no per-run API cost. Needs an Ollama server on localhost:11434 with the model pulled.
+    execution:
+      type: cli
+      cwd: engines/local-image
+      command: [python, story_image_pipeline.py]
+      positional: []
+      flags:
+        idea: --idea
+        ollama_model: --ollama-model
+        sd_model: --sd-model
+        width: --width
+        height: --height
+        steps: --steps
+        guidance: --guidance
+        seed: --seed
+      output_dir_flag: --out
+      outputs:
+        frames: "{output_dir}/frame_*.png"
+        plan: "{output_dir}/story_plan.json"
+    failure_modes:
+      - Out of GPU memory; the script unloads the Ollama model before rendering to free VRAM, but small GPUs can still fail.
+      - Ollama server not running or model not pulled.

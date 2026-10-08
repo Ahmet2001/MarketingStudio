@@ -1,0 +1,62 @@
+spec_version: "0.1"
+capabilities:
+  - id: documentary.video.generate
+    version: 0.1.0
+    title: Documentary explainer video
+    description: Turns a factual topic into a researched, narrated vertical explainer video that uses licensed real archive photos by default.
+    status: working
+    inputs:
+      topic:
+        {type: text, required: true, description: The factual topic or event.}
+      language:
+        {type: text, default: English}
+      duration:
+        {type: integer, default: 45, description: Approximate narration length in seconds.}
+      scenes:
+        {type: integer, default: 7}
+      visual_source:
+        {type: enum, values: [real, generated], default: real, description: "real = Openverse and Wikimedia Commons photos, generated = AI images."}
+      skip_cover:
+        {type: boolean, default: false}
+      skip_research:
+        {type: boolean, default: false}
+      seed:
+        {type: integer}
+    outputs:
+      video: {type: "file:mp4", description: The finished vertical video.}
+      script: {type: "file:json", description: Explainer script and scene plan (explainer.json).}
+      research: {type: "file:json", description: Sources used (research.json).}
+      photo_credits: {type: "file:txt", description: Attribution for the real photos used (real_photo_credits.txt).}
+    requires:
+      env: [GEMINI_API_KEY, ELEVENLABS_API_KEY]
+      binaries: [ffmpeg, ffprobe]
+      hardware: []
+    permissions:
+      network: true
+      writes_external_state: false
+      requires_approval: false
+    cost:
+      estimate_usd: null
+      notes: Not measured. REPLICATE_API_TOKEN is only needed when visual_source is generated. WIKIMEDIA_USER_AGENT is optional contact info for Wikimedia requests.
+    execution:
+      type: cli
+      cwd: engines/documentary-video
+      command: [python, main.py]
+      positional: [topic]
+      flags:
+        language: --language
+        duration: --duration
+        scenes: --scenes
+        visual_source: --visual-source
+        skip_cover: --skip-cover
+        skip_research: --skip-research
+        seed: --seed
+      output_dir_flag: --output-dir
+      outputs:
+        video: "{output_dir}/*.mp4"
+        script: "{output_dir}/explainer.json"
+        research: "{output_dir}/research.json"
+        photo_credits: "{output_dir}/real_photo_credits.txt"
+    failure_modes:
+      - Scenes with no licensed photo match fall back to broader queries; a weak archive can still leave scenes with poor matches.
+      - "{output_dir} also contains joined.mp4 and intermediate clips; pick the file named after the topic slug."

@@ -1,0 +1,194 @@
+# Social connectors. Every function named here exists in the matching *_toolbox.py.
+# All publish capabilities change state outside this machine, so they require approval.
+spec_version: "0.1"
+capabilities:
+  # ---------- search (read only) ----------
+  - id: social.search.reddit
+    version: 0.1.0
+    title: Search Reddit posts
+    description: Searches Reddit posts through the official Data API, optionally inside one subreddit.
+    status: working
+    inputs:
+      query: {type: text, required: true}
+      subreddit: {type: text, default: ""}
+      sort: {type: text, default: relevance}
+      time_filter: {type: text, default: all}
+      limit: {type: integer, default: 25}
+      after: {type: text, default: "", description: Pagination cursor.}
+    outputs:
+      result: {type: object}
+    requires:
+      env: [REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_USER_AGENT]
+      binaries: []
+      hardware: []
+    permissions: {network: true, writes_external_state: false, requires_approval: false}
+    cost: {estimate_usd: 0, notes: Subject to Reddit API rate limits.}
+    execution: {type: python, module: connectors.reddit_toolbox, function: search_reddit_api_posts}
+    failure_modes:
+      - Missing credentials or user agent.
+      - Rate limited by Reddit.
+
+  - id: social.search.x
+    version: 0.1.0
+    title: Search X posts
+    description: Searches recent X posts through the official API.
+    status: working
+    inputs:
+      query: {type: text, required: true}
+      max_results: {type: integer, default: 10}
+      next_token: {type: text, default: ""}
+      sort_order: {type: text, default: recency}
+    outputs:
+      result: {type: object}
+    requires:
+      env: [X_BEARER_TOKEN]
+      binaries: []
+      hardware: []
+    permissions: {network: true, writes_external_state: false, requires_approval: false}
+    cost: {estimate_usd: null, notes: Depends on the X API plan.}
+    execution: {type: python, module: connectors.x_toolbox, function: search_x_api_posts}
+    failure_modes:
+      - Missing bearer token or insufficient API plan.
+
+  - id: social.search.youtube
+    version: 0.1.0
+    title: Search YouTube
+    description: Searches YouTube videos, channels or playlists through the Data API.
+    status: working
+    inputs:
+      query: {type: text, required: true}
+      resource_type: {type: text, default: video}
+      max_results: {type: integer, default: 25}
+      page_token: {type: text, default: ""}
+      order: {type: text, default: relevance}
+      published_after: {type: text, default: "", description: RFC 3339 timestamp.}
+    outputs:
+      result: {type: object}
+    requires:
+      env: [YOUTUBE_API_KEY]
+      binaries: []
+      hardware: []
+    permissions: {network: true, writes_external_state: false, requires_approval: false}
+    cost: {estimate_usd: 0, notes: Uses YouTube Data API quota units.}
+    execution: {type: python, module: connectors.youtube_toolbox, function: search_youtube_api}
+    failure_modes:
+      - Daily API quota exhausted.
+
+  # ---------- publish (writes external state, needs approval) ----------
+  - id: social.publish.reddit_text
+    version: 0.1.0
+    title: Post text to Reddit
+    description: Submits a text post to a subreddit through the official API.
+    status: working
+    inputs:
+      subreddit: {type: text, required: true}
+      title: {type: text, required: true}
+      body: {type: text, default: ""}
+      send_replies: {type: boolean, default: true}
+      nsfw: {type: boolean, default: false}
+      spoiler: {type: boolean, default: false}
+    outputs:
+      result: {type: object, description: Created post details.}
+    requires:
+      env: [REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_REFRESH_TOKEN, REDDIT_USER_AGENT]
+      binaries: []
+      hardware: []
+    permissions: {network: true, writes_external_state: true, requires_approval: true}
+    cost: {estimate_usd: 0, notes: Subject to subreddit rules and API rate limits.}
+    execution: {type: python, module: connectors.reddit_toolbox, function: publish_reddit_api_text_post}
+    failure_modes:
+      - Subreddit rules or spam filters reject the post.
+
+  - id: social.publish.reddit_link
+    version: 0.1.0
+    title: Post a link to Reddit
+    description: Submits a link post to a subreddit through the official API.
+    status: working
+    inputs:
+      subreddit: {type: text, required: true}
+      title: {type: text, required: true}
+      url: {type: url, required: true}
+      send_replies: {type: boolean, default: true}
+      nsfw: {type: boolean, default: false}
+      spoiler: {type: boolean, default: false}
+    outputs:
+      result: {type: object}
+    requires:
+      env: [REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_REFRESH_TOKEN, REDDIT_USER_AGENT]
+      binaries: []
+      hardware: []
+    permissions: {network: true, writes_external_state: true, requires_approval: true}
+    cost: {estimate_usd: 0, notes: Subject to subreddit rules and API rate limits.}
+    execution: {type: python, module: connectors.reddit_toolbox, function: publish_reddit_api_link_post}
+    failure_modes:
+      - Subreddit rules or spam filters reject the post.
+
+  - id: social.publish.x_post
+    version: 0.1.0
+    title: Publish an X post
+    description: Publishes a post on X through the official API with user-context credentials.
+    status: working
+    inputs:
+      text: {type: text, required: true}
+      reply_to_tweet_id: {type: text, default: ""}
+      quote_tweet_id: {type: text, default: ""}
+      media_ids: {type: text, default: "", description: Comma separated ids of media already uploaded to X.}
+    outputs:
+      result: {type: object}
+    requires:
+      env: [X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET]
+      binaries: []
+      hardware: []
+    permissions: {network: true, writes_external_state: true, requires_approval: true}
+    cost: {estimate_usd: null, notes: Depends on the X API plan.}
+    execution: {type: python, module: connectors.x_toolbox, function: publish_x_api_post}
+    failure_modes:
+      - Duplicate or over-length text is rejected by X.
+
+  - id: social.publish.youtube_video
+    version: 0.1.0
+    title: Upload a YouTube video
+    description: Uploads a local video file to YouTube through the Data API. Defaults to private.
+    status: working
+    inputs:
+      video_path: {type: "file:mp4", required: true}
+      title: {type: text, required: true}
+      description: {type: text, default: ""}
+      tags: {type: text, default: ""}
+      category_id: {type: text, default: "22"}
+      privacy_status: {type: enum, values: [private, unlisted, public], default: private}
+      made_for_kids: {type: boolean, default: false}
+    outputs:
+      result: {type: object}
+    requires:
+      env: [YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN]
+      binaries: []
+      hardware: []
+    permissions: {network: true, writes_external_state: true, requires_approval: true}
+    cost: {estimate_usd: 0, notes: Upload consumes a large block of daily quota units.}
+    execution: {type: python, module: connectors.youtube_toolbox, function: upload_youtube_api_video}
+    failure_modes:
+      - Quota exhausted or unverified API project forces uploads to private.
+
+  - id: social.publish.instagram_reel
+    version: 0.1.0
+    title: Publish an Instagram Reel
+    description: Creates, waits for and publishes a Reel from a public video URL through the Instagram API.
+    status: working
+    inputs:
+      video_url: {type: url, required: true, description: Public HTTPS URL of the video, not a local path.}
+      caption: {type: text, default: ""}
+      share_to_feed: {type: boolean, default: true}
+      cover_url: {type: url, default: ""}
+      timeout_seconds: {type: integer, default: 120}
+    outputs:
+      result: {type: object}
+    requires:
+      env: [INSTAGRAM_ACCESS_TOKEN, INSTAGRAM_USER_ID]
+      binaries: []
+      hardware: []
+    permissions: {network: true, writes_external_state: true, requires_approval: true}
+    cost: {estimate_usd: 0, notes: Limited by the account's daily publishing limit.}
+    execution: {type: python, module: connectors.instagram_toolbox, function: publish_instagram_api_reel}
+    failure_modes:
+      - Instagram cannot fetch the video URL, or processing times out.
