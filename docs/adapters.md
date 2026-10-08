@@ -30,7 +30,11 @@ Two kinds of step:
 ```bash
 python -m studio adapt workflow.yaml --target agent-pack  --out ./pack   --sources ./my_tools
 python -m studio adapt workflow.yaml --target tool-schema --out ./schema --sources ./my_tools
+python -m studio adapt workflow.yaml --target job-handler --out ./handler --sources ./my_tools
+python -m studio adapt workflow.yaml --target worker      --out ./worker  --sources ./my_tools
 ```
+
+The first two make the workflow a **tool** a model calls. The last two make it an **item a worker runs**: `job-handler` is one file you plug into a worker you already have, `worker` is a whole process that serves a queue.
 
 Each prints notes about what the target cannot do. Read them.
 
@@ -43,6 +47,42 @@ Each prints notes about what the target cannot do. Read them.
 A folder the BrowserAgent installs with `/agent pack install`: `plugin.yaml`, `tools/<name>.py`, `env.example`, `README.md`. The tool is **one self-contained file** (runner, workflow, capabilities and engine sources embedded) shaped the way that agent reads tools: a synchronous function named like the tool, real `str/int/float/bool` annotations, the description in the docstring. The workflow id becomes the tool name and must be 3 to 64 lowercase letters, digits or underscores.
 
 The tool returns a dict: `{"status": "ok", "outputs": ..., "run_folder": ...}`, `{"status": "needs_approval", ...}`, or `{"status": "error", "error": ...}`.
+
+### `job-handler`
+
+`handler.py`, `job.schema.json`, `README.md`. One file, standard library only, with the runner, workflow, capabilities and single-file engines embedded. It does not poll or listen; a worker that already has jobs calls it.
+
+```python
+import handler
+result = handler.handle(job["payload"]["inputs"], approved_steps=job.get("approved_steps", []))
+```
+
+From a worker in another language, run it as a process: `echo '{"inputs": {...}, "approved_steps": []}' | python handler.py` and read one JSON object from stdout.
+
+The result is `{"status": "done", "outputs": ..., "run_folder": ...}`, `{"status": "awaiting_approval", "gated_steps": [...]}` (nothing ran) or `{"status": "failed", "error": ...}`. **Approval is per step**: a step that writes to the outside world runs only when its id is in `approved_steps`.
+
+### `worker`
+
+A folder: `worker.py` (standard library only), `handler.py`, `job.schema.json`, `migrations/001_<id>_jobs.sql`, `.env.example`, `Dockerfile`, `README.md` (and `requirements.txt` if engines declare packages). Run it with `python worker.py` (`--once` to process what is queued and exit).
+
+Two queues, chosen with `WORKER_BACKEND`:
+
+| Queue | How it works |
+|---|---|
+| `file` (default) | Jobs are JSON files that move between `queued/`, `processing/`, `awaiting_approval/`, `done/` and `failed/`. Claiming is an atomic rename, so several workers can share a folder. Nothing to install. |
+| `supabase` | The `<id>_jobs` table over REST, in the shape of the existing `*_jobs` tables: `status`, `payload`, `results`, `error`, `attempts`, timestamps, and a claim function using `for update skip locked`. The migration is generated. |
+
+A job's `payload` is exactly `{"inputs": {...}}`; any other field fails the job. Results have secret-looking environment values removed before they are stored.
+
+**Approval is held by the queue.** A job for a workflow with gated steps stops in `awaiting_approval` and nothing runs. An operator adds the step ids to `approved_steps` and puts the job back in `queued`. That is a real gate only if whoever creates jobs cannot write `approved_steps` or `status`: the migration includes the column-level grants that make this so (commented out; adapt the role names). With the file queue it depends on who can write to the folders.
+
+### Using it inside a worker you already run
+
+Take `job-handler`. Your worker keeps its own queue, credentials and scheduling and calls the handler for the jobs of this workflow. The factory does not edit other projects' workers.
+
+- A worker written in Python can import `handler.py`.
+- A worker in another language can start it as a process.
+- Do not route workflows that write to the outside world through a worker whose design forbids writes. For example, `platform_data_worker` in marketing-agent-assets runs only a hand-written, read-only allowlist of toolbox functions; a workflow is not one of those, and adding one means changing that worker's policy on purpose.
 
 ## File inputs
 
@@ -80,4 +120,4 @@ Your engines can import whatever is installed where they run. `portable.py` itse
 
 ## Not done yet
 
-An MCP adapter, a `job-spec` adapter for a queue-based runtime, and an install step. Packaging nested workflows. Parallel steps.
+An MCP adapter and an install step. Packaging nested workflows. Parallel steps.

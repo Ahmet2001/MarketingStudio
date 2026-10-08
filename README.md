@@ -184,7 +184,7 @@ python -m studio capabilities --sources ./my_tools ~/shared_pool     # any sourc
 python -m studio run workflow.yaml --sources ./my_tools --input topic="..."   # run it locally
 ```
 
-Guide: [docs/workflows.md](docs/workflows.md). A workflow can also leave as a self-contained bundle (`python -m studio bundle`) and be reshaped for a consumer with `python -m studio adapt --target agent-pack|tool-schema`; see [docs/adapters.md](docs/adapters.md). Check capability files from any folder with `python -m studio check --sources DIR`.
+Guide: [docs/workflows.md](docs/workflows.md). A workflow can also leave as a self-contained bundle (`python -m studio bundle`) and be reshaped for a consumer with `python -m studio adapt --target agent-pack|tool-schema|job-handler|worker`; see [docs/adapters.md](docs/adapters.md). Check capability files from any folder with `python -m studio check --sources DIR`.
 
 ## Setup requirements
 

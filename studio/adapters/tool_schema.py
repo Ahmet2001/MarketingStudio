@@ -43,18 +43,21 @@ def _property(spec: dict[str, Any]) -> dict[str, Any]:
     return prop
 
 
-def tool_schema(bundle: Bundle) -> tuple[dict[str, str], list[str]]:
+def input_schema(bundle: Bundle, *, approve_param: bool = False) -> dict[str, Any]:
+    """JSON Schema for a bundle's inputs, optionally with the ``approve`` flag."""
+
     manifest = bundle.manifest
     properties = {name: _property(spec) for name, spec in manifest["inputs"].items()}
     required = [n for n, s in manifest["inputs"].items() if s.get("required") and "default" not in s]
+    if approve_param and gated(bundle):
+        properties["approve"] = {"type": "boolean", "default": False, "description": approve_text(bundle)}
+    return {"type": "object", "properties": properties, "required": required}
+
+
+def tool_schema(bundle: Bundle) -> tuple[dict[str, str], list[str]]:
+    manifest = bundle.manifest
     description = manifest["description"]
-    if gated(bundle):
-        properties["approve"] = {
-            "type": "boolean",
-            "default": False,
-            "description": approve_text(bundle),
-        }
-    schema = {"type": "object", "properties": properties, "required": required}
+    schema = input_schema(bundle, approve_param=True)
     anthropic = {"name": manifest["id"], "description": description, "input_schema": schema}
     openai = {"type": "function", "function": {"name": manifest["id"], "description": description, "parameters": schema}}
     files = {

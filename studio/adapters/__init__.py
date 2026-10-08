@@ -12,13 +12,17 @@ from typing import Callable
 
 from ..bundle import Bundle
 from .agent_pack import agent_pack
+from .job_handler import job_handler
 from .tool_schema import tool_schema
+from .worker import worker
 
 Adapter = Callable[[Bundle], tuple[dict[str, str], list[str]]]
 
 ADAPTERS: dict[str, Adapter] = {
     "tool-schema": tool_schema,
     "agent-pack": agent_pack,
+    "job-handler": job_handler,
+    "worker": worker,
 }
 
-__all__ = ["ADAPTERS", "Adapter", "agent_pack", "tool_schema"]
+__all__ = ["ADAPTERS", "Adapter", "agent_pack", "job_handler", "tool_schema", "worker"]
