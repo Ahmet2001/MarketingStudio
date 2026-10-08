@@ -3,29 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MarketingStudio Editor</title>
+<title>MarketingStudio Viewer</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <header id="top">
   <strong class="brand">MarketingStudio</strong>
-  <select id="open" title="Open a workflow file"></select>
-  <button id="new">New</button>
-  <button id="save" class="primary">Save</button>
-  <button id="layout" title="Arrange the steps left to right">Auto layout</button>
-  <button id="reload" title="Re-read the capability files">Reload capabilities</button>
-  <span id="where"></span>
-  <label class="check"><input type="checkbox" id="unknown"> allow unknown capabilities</label>
+  <nav id="views"><button data-view="workflows" class="on">Workflows</button><button data-view="capabilities">Capabilities</button></nav>
+  <span id="root"></span>
+  <button id="reload" title="Read the files again">Reload</button>
 </header>
 <main>
-  <aside id="palette"><input id="search" placeholder="Search capabilities…"><div id="caps"></div></aside>
-  <section id="canvas"><div id="world"><svg id="edges"></svg></div><div id="hint">Drag a capability onto the canvas. Drag from a right dot to a left dot to connect. Double-click a line to remove it.</div></section>
-  <aside id="inspector"></aside>
+  <aside id="list"><input id="search" placeholder="Search…"><div id="items"></div></aside>
+  <section id="detail"></section>
 </main>
-<footer id="bottom">
-  <nav id="tabs"></nav>
-  <div id="panel"></div>
-</footer>
 <script src="/app.js"></script>
 </body>
 </html>

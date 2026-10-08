@@ -1,9 +1,9 @@
-"""The editor's local server: a thin JSON layer over the studio package.
+"""The viewer's local server: a read-only JSON layer over the studio package.
 
-It adds no workflow logic. Validation, planning, running, bundling and the
-adapters are the studio functions; this file only carries documents to them and
-results back. It listens on 127.0.0.1 and checks Host and Origin, because a page
-in your browser must not be able to run workflows or write files through it.
+It adds no workflow logic. Validation, planning, bundling and the adapters are
+the studio functions; this file only carries documents to them and results back.
+It writes nothing and runs nothing. It listens on 127.0.0.1 and checks Host and
+Origin, so a page in your browser cannot read your workflow files through it.
 """
 
 from __future__ import annotations
@@ -11,11 +11,7 @@ from __future__ import annotations
 import base64
 import io
 import json
-import threading
-import time
-import uuid
 import zipfile
-from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -27,15 +23,21 @@ from studio import RegistryError, WorkflowError, analyze, load_registry
 from studio.adapters import ADAPTERS
 from studio.bundle import BundleError, build_bundle
 from studio.registry import SKIP_DIRS, Registry
-from studio.runner import RunError, parse_input, run_workflow
 from studio.views import plan_workflow
-from studio.workflow import SPEC_VERSION
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = Path(__file__).resolve().parent / "static"
-LAYOUTS = Path(__file__).resolve().parent / "layouts"
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8"}
-MAX_BODY = 4_000_000
+MAX_SHOWN = 400_000  # characters of one file sent to the page; the zip always has the whole file
+
+TARGETS = {
+    "bundle": "The neutral export: workflow, contracts, the standard-library runner and single-file engines. Everything else is built from this.",
+    "agent-pack": "A tool pack for BrowserAgent: plugin.yaml and one self-contained tools/<name>.py.",
+    "tool-schema": "Tool definitions for LLM function calling, in Anthropic and OpenAI shapes. A definition only.",
+    "job-handler": "One handler.py a worker you already run can call (import it, or pipe JSON to it).",
+    "worker": "A standalone queue worker (file queue or Supabase), with a migration, Dockerfile and per-step approval.",
+    "mcp": "A Model Context Protocol server over stdio that offers the workflow as one tool.",
+}
 
 
 class ApiError(Exception):
@@ -44,17 +46,14 @@ class ApiError(Exception):
         self.status = status
 
 
-class Studio:
-    """The state behind the API: where capabilities come from and which runs are going."""
+class Viewer:
+    """Where capabilities and workflow files come from."""
 
-    def __init__(self, sources: list[Path] | None, root: Path, layouts: Path = LAYOUTS) -> None:
+    def __init__(self, sources: list[Path] | None, root: Path) -> None:
         self.sources = sources
         self.root = root
-        self.layouts = layouts
         self.registry: Registry = Registry()
         self.registry_error: str | None = None
-        self.runs: dict[str, dict[str, Any]] = {}
-        self.lock = threading.Lock()
         self.reload()
 
     def reload(self) -> None:
@@ -68,55 +67,81 @@ class Studio:
             raise ApiError("capabilities could not be loaded: " + self.registry_error)
         return self.registry
 
-    # ---- files -------------------------------------------------------
     def safe(self, relative: str) -> Path:
         path = (self.root / str(relative)).resolve()
         if path.suffix not in {".yaml", ".yml"} or not path.is_relative_to(self.root):
-            raise ApiError("only .yaml files inside " + str(self.root) + " can be opened or saved.", 403)
+            raise ApiError("only .yaml files inside " + str(self.root) + " can be opened.", 403)
         return path
 
-    def workflows(self) -> list[str]:
+    def read(self, relative: str) -> tuple[dict[str, Any], str]:
+        file = self.safe(relative)
+        if not file.is_file():
+            raise ApiError("no such file", 404)
+        text = file.read_text(encoding="utf-8")
+        try:
+            doc = yaml.safe_load(text)
+        except yaml.YAMLError as error:
+            raise ApiError("not valid YAML: " + str(error)) from error
+        if not isinstance(doc, dict) or not isinstance(doc.get("workflow"), dict):
+            raise ApiError("this file has no 'workflow' section")
+        return doc, text
+
+    # ---- api ---------------------------------------------------------
+    def workflows(self) -> list[dict[str, Any]]:
+        registry = self.need_registry()
         found = []
         for path in sorted(self.root.rglob("*.y*ml")):
             relative = path.relative_to(self.root)
-            if path.suffix not in {".yaml", ".yml"} or SKIP_DIRS & set(relative.parts) or "runs" in relative.parts[:1]:
+            if path.suffix not in {".yaml", ".yml"} or SKIP_DIRS & set(relative.parts) or relative.parts[0] == "runs":
                 continue
             try:
                 text = path.read_text(encoding="utf-8")
-                if "workflow:" in text and "spec_version" in text and isinstance(yaml.safe_load(text), dict):
-                    found.append(str(relative))
-            except (OSError, yaml.YAMLError, UnicodeDecodeError):
+                if "workflow:" not in text or "spec_version" not in text:
+                    continue
+                doc = yaml.safe_load(text)
+                wf = doc["workflow"]
+                analysis = analyze(doc, registry)
+            except (OSError, yaml.YAMLError, UnicodeDecodeError, KeyError, TypeError):
                 continue
+            found.append({
+                "path": str(relative), "id": wf.get("id"), "name": wf.get("name"), "description": wf.get("description", ""),
+                "inputs": len(wf.get("inputs") or {}), "steps": len(wf.get("steps") or []),
+                "valid": not analysis.errors, "errors": len(analysis.errors),
+                "gated": sum(1 for v in analysis.approval.values() if v),
+            })
         return found
 
-    def layout_file(self, relative: str) -> Path:
-        return self.layouts / (relative.replace("/", "__") + ".json")
+    def workflow(self, relative: str) -> dict[str, Any]:
+        doc, text = self.read(relative)
+        registry = self.need_registry()
+        analysis = analyze(doc, registry)
+        plan = json.loads(json.dumps(plan_workflow(doc, registry), default=str)) if not analysis.errors else None
+        used = {s.get("capability") for s in doc["workflow"].get("steps") or [] if isinstance(s, dict)}
+        return {
+            "path": relative, "doc": doc, "yaml": text,
+            "errors": analysis.errors, "warnings": analysis.warnings, "order": analysis.order,
+            "approval": analysis.approval, "plan": plan,
+            "capabilities": {cid: self._capability(cid) for cid in sorted(c for c in used if c in registry)},
+        }
 
-    # ---- api ---------------------------------------------------------
     def capabilities(self) -> dict[str, Any]:
         self.reload()
-        items = []
-        for cid, cap in sorted(self.registry.items()):
-            items.append({
-                "id": cid, "title": cap.get("title", cid), "description": cap.get("description", ""),
-                "status": cap.get("status"), "inputs": cap.get("inputs") or {}, "outputs": cap.get("outputs") or {},
-                "requires": cap.get("requires") or {}, "permissions": cap.get("permissions") or {},
-                "cost": (cap.get("cost") or {}).get("estimate_usd"), "kind": cap["execution"]["type"],
-                "origin": str(self.registry.origin[cid].name),
-            })
-        return {"capabilities": items, "error": self.registry_error, "root": str(self.root), "targets": sorted(ADAPTERS) + ["bundle"]}
+        return {"capabilities": [self._capability(cid) for cid in sorted(self.registry)], "error": self.registry_error,
+                "root": str(self.root), "targets": [{"id": t, "about": TARGETS[t]} for t in ["bundle", *sorted(ADAPTERS)]]}
 
-    def validate(self, doc: Any, allow_unknown: bool = False) -> dict[str, Any]:
-        analysis = analyze(doc, self.need_registry(), allow_unknown=allow_unknown)
-        return {"errors": analysis.errors, "warnings": analysis.warnings, "order": analysis.order,
-                "approval": analysis.approval, "output_types": analysis.output_types}
+    def _capability(self, cid: str) -> dict[str, Any]:
+        cap = self.registry[cid]
+        return {
+            "id": cid, "title": cap.get("title", cid), "description": cap.get("description", ""), "status": cap.get("status"),
+            "inputs": cap.get("inputs") or {}, "outputs": cap.get("outputs") or {}, "requires": cap.get("requires") or {},
+            "permissions": cap.get("permissions") or {}, "cost": (cap.get("cost") or {}).get("estimate_usd"),
+            "kind": cap["execution"]["type"], "origin": self.registry.origin[cid].name,
+        }
 
-    def plan(self, doc: Any, allow_unknown: bool = False) -> dict[str, Any]:
-        return json.loads(json.dumps(plan_workflow(doc, self.need_registry(), allow_unknown=allow_unknown), default=str))
-
-    def export(self, doc: Any, target: str) -> dict[str, Any]:
+    def export(self, relative: str, target: str) -> dict[str, Any]:
         if target != "bundle" and target not in ADAPTERS:
             raise ApiError("unknown target: " + str(target))
+        doc, _ = self.read(relative)
         try:
             bundle = build_bundle(doc, self.need_registry())
             files, notes = (bundle.files(), bundle.warnings) if target == "bundle" else ADAPTERS[target](bundle)
@@ -128,43 +153,18 @@ class Studio:
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
             for name, text in files.items():
                 archive.writestr(name, text)
-        return {"files": sorted(files), "notes": notes, "zip": base64.b64encode(buffer.getvalue()).decode(),
-                "name": f"{doc['workflow']['id']}-{target}.zip"}
-
-    def start_run(self, doc: Any, raw_inputs: dict[str, Any], approved: list[str]) -> dict[str, str]:
-        registry = self.need_registry()
-        analysis = analyze(doc, registry)
-        if analysis.errors:
-            raise ApiError("the workflow is not valid: " + "; ".join(analysis.errors))
-        specs = doc["workflow"].get("inputs") or {}
-        try:
-            typed = {k: parse_input(specs[k], v) if k in specs else v for k, v in raw_inputs.items() if v not in (None, "")}
-        except RunError as error:
-            raise ApiError(str(error)) from error
-        run_id = uuid.uuid4().hex[:10]
-        workdir = self.root / "runs" / (datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + run_id[:4])
-        record = {"status": "running", "log": [], "outputs": None, "error": None, "folder": str(workdir.relative_to(self.root)), "started": time.time()}
-        with self.lock:
-            self.runs[run_id] = record
-
-        def work() -> None:
-            try:
-                result = run_workflow(doc, registry, typed, workdir, approve=lambda step, cap: step in approved,
-                                      log=lambda line: record["log"].append(str(line)))
-                record["outputs"] = json.loads(json.dumps(result.outputs, default=str))
-                record["status"] = "done"
-            except Exception as error:  # report any failure to the page instead of dying silently
-                record["error"], record["status"] = f"{type(error).__name__}: {error}", "failed"
-
-        threading.Thread(target=work, daemon=True).start()
-        return {"id": run_id}
+        return {
+            "target": target, "notes": notes, "name": f"{doc['workflow']['id']}-{target}.zip",
+            "files": [{"name": n, "size": len(t.encode()), "text": t[:MAX_SHOWN], "cut": len(t) > MAX_SHOWN} for n, t in sorted(files.items())],
+            "zip": base64.b64encode(buffer.getvalue()).decode(),
+        }
 
 
-def make_handler(studio: Studio, port: int):
+def make_handler(viewer: Viewer, port: int):
     hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
 
     class Handler(BaseHTTPRequestHandler):
-        server_version = "StudioUI"
+        server_version = "StudioViewer"
 
         def log_message(self, *args: Any) -> None:  # keep the terminal for the user
             pass
@@ -189,7 +189,7 @@ def make_handler(studio: Studio, port: int):
 
         def _body(self) -> dict[str, Any]:
             length = int(self.headers.get("Content-Length") or 0)
-            if length > MAX_BODY:
+            if length > 100_000:
                 raise ApiError("request too large", 413)
             try:
                 data = json.loads(self.rfile.read(length) or b"{}")
@@ -219,57 +219,15 @@ def make_handler(studio: Studio, port: int):
         def _api(self, method: str, path: str, query: dict[str, str]) -> Any:
             if method == "GET":
                 if path == "/api/capabilities":
-                    return studio.capabilities()
+                    return viewer.capabilities()
                 if path == "/api/workflows":
-                    return {"workflows": studio.workflows()}
+                    return {"workflows": viewer.workflows()}
                 if path == "/api/workflow":
-                    file = studio.safe(query.get("path", ""))
-                    if not file.is_file():
-                        raise ApiError("no such file", 404)
-                    try:
-                        doc = yaml.safe_load(file.read_text(encoding="utf-8"))
-                    except yaml.YAMLError as error:
-                        raise ApiError("not valid YAML: " + str(error)) from error
-                    layout = studio.layout_file(query["path"])
-                    return {"doc": doc, "layout": json.loads(layout.read_text()) if layout.is_file() else {}}
-                if path == "/api/run":
-                    record = studio.runs.get(query.get("id", ""))
-                    if not record:
-                        raise ApiError("unknown run", 404)
-                    return {**record, "log": record["log"][-400:]}
+                    return viewer.workflow(query.get("path", ""))
                 raise ApiError("not found", 404)
-            if method != "POST":
-                raise ApiError("method not allowed", 405)
-            body = self._body()
-            doc = body.get("doc")
-            if path == "/api/validate":
-                return studio.validate(doc, bool(body.get("allow_unknown")))
-            if path == "/api/plan":
-                return studio.plan(doc, bool(body.get("allow_unknown")))
-            if path == "/api/yaml":
-                return {"text": yaml.safe_dump(doc, sort_keys=False, allow_unicode=True)}
-            if path == "/api/parse":
-                try:
-                    parsed = yaml.safe_load(str(body.get("text", "")))
-                except yaml.YAMLError as error:
-                    raise ApiError("not valid YAML: " + str(error)) from error
-                if not isinstance(parsed, dict):
-                    raise ApiError("expected a YAML mapping")
-                return {"doc": parsed}
-            if path == "/api/export":
-                return studio.export(doc, str(body.get("target", "")))
-            if path == "/api/run":
-                return studio.start_run(doc, body.get("inputs") or {}, list(body.get("approve") or []))
-            if path == "/api/save":
-                file = studio.safe(str(body.get("path", "")))
-                if not isinstance(doc, dict) or doc.get("spec_version") != SPEC_VERSION or "workflow" not in doc:
-                    raise ApiError("refusing to save something that is not a workflow document")
-                file.parent.mkdir(parents=True, exist_ok=True)
-                file.write_text(yaml.safe_dump(doc, sort_keys=False, allow_unicode=True), encoding="utf-8")
-                layout = studio.layout_file(str(body["path"]))
-                studio.layouts.mkdir(parents=True, exist_ok=True)
-                layout.write_text(json.dumps(body.get("layout") or {}), encoding="utf-8")
-                return {"saved": str(file.relative_to(studio.root))}
+            if method == "POST" and path == "/api/export":
+                body = self._body()
+                return viewer.export(str(body.get("path", "")), str(body.get("target", "")))
             raise ApiError("not found", 404)
 
         def do_GET(self) -> None:
@@ -282,9 +240,9 @@ def make_handler(studio: Studio, port: int):
 
 
 def serve(port: int, sources: list[Path] | None, root: Path) -> None:
-    studio = Studio(sources, root)
-    server = ThreadingHTTPServer(("127.0.0.1", port), make_handler(studio, port))
-    print(f"MarketingStudio editor: http://127.0.0.1:{port}  (workflows in {root})  Ctrl+C to stop")
+    viewer = Viewer(sources, root)
+    server = ThreadingHTTPServer(("127.0.0.1", port), make_handler(viewer, port))
+    print(f"MarketingStudio viewer: http://127.0.0.1:{port}  (workflows in {root})  Ctrl+C to stop")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

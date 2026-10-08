@@ -1,6 +1,6 @@
-# Workflow editor (experimental)
+# Workflow viewer (experimental)
 
-A local, browser-based editor for the workflow files the `studio` package reads and writes. It is an **experiment**: it is self-contained in this folder, and nothing else in the repository imports it.
+A local, read-only browser page for looking at what the `studio` package has: the workflows you wrote, the capabilities they use, and exactly what each export format produces. It is an **experiment**, self-contained in this folder; nothing else in the repository imports it.
 
 ```bash
 apps/studio-api/.venv/bin/python -m ui --sources examples/single_file examples/text_report engines
@@ -9,21 +9,18 @@ apps/studio-api/.venv/bin/python -m ui --sources examples/single_file examples/t
 
 Any Python with PyYAML works. There is no build step and no `npm install`.
 
-## What it does
+## What you can do
 
-- **Palette** (left): every capability the sources define. Drag one onto the canvas, or double-click it.
-- **Canvas**: steps are nodes. Drag from a right dot to a left dot to connect an output to an input (this writes `{{ steps.a.outputs.b }}`). Drag from a "Workflow inputs" dot to use a workflow input. Double-click a line to remove it. `Delete` removes the selected step.
-- **Inspector** (right): edit the selected step (id, inputs, approval), the workflow's inputs and outputs, or its id and name.
-- **Bottom panel**: *Problems* (live validation), *Plan* (order, approvals, what is missing here, cost), *Run* (runs on this machine, with approval checkboxes for steps that write outside), *Export* (every adapter, downloaded as a zip), *YAML* (see and edit the file text).
-
-It edits plain `workflow.yaml` files, so you can edit the same file by hand or with the `studio` command line.
+- **Workflows**: every workflow file under the root, with its state (valid or how many problems, needs approval). Open one to see its inputs, its steps in run order with the capability and approval for each, its outputs, and whether this machine is ready to run it (missing keys, programs, packages; estimated cost).
+- **Export**: pick `bundle`, `agent-pack`, `tool-schema`, `job-handler`, `worker` or `mcp`. The page builds it and shows the file list, the notes the adapter prints, and the content of every file. Download the whole thing as a zip. If an adapter refuses (for example a workflow id that is too short for an agent tool name) you see its message.
+- **Capabilities**: the catalogue from your sources, with inputs, outputs, requirements and permissions.
 
 ## Boundaries
 
-- It adds **no workflow logic**: validation, planning, running, bundling and the adapters are the `studio` functions.
-- The server listens on `127.0.0.1` only, refuses other `Host`/`Origin` headers, and opens or saves only `.yaml` files under `--root` (default: the repository).
-- Node positions are kept outside the workflow file, in `ui/layouts/` (git-ignored), so workflow files stay clean.
-- Running a workflow here runs it for real, with your environment and keys. Steps that change something outside the machine need their checkbox ticked in the *Run* tab.
+- Read-only. It runs nothing and writes nothing; there is no save and no run endpoint (the tests check that).
+- It adds no workflow logic: validation, planning and the adapters are the `studio` functions.
+- The server listens on `127.0.0.1` only, refuses other `Host`/`Origin` headers, and opens only `.yaml` files under `--root` (default: the repository).
+- Authoring stays in files and the `studio` command line (`studio new`, `validate`, `plan`, `run`).
 
 ## Removing it
 
@@ -35,4 +32,4 @@ Delete this folder (`rm -rf ui`) and the one-line mention in the main README. No
 apps/studio-api/.venv/bin/python -m pytest ui
 ```
 
-These test the server (API, path safety, host/origin checks, run, export). The page itself was checked by driving it in a real browser; that script is not part of the repository.
+They test the server (listing, detail, every export target, path safety, host/origin checks). The page itself was checked by driving it in a real browser; that script is not part of the repository.
