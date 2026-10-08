@@ -41,7 +41,7 @@ capabilities:
       notes: Not measured. Spends Gemini, ElevenLabs and image-provider credits per run. REPLICATE_API_TOKEN is not needed in video game mode.
     execution:
       type: cli
-      cwd: engines/story-video
+      cwd: .
       command: [python, main.py]
       positional: [topic]
       flags:
@@ -54,10 +54,11 @@ capabilities:
         skip_research: --skip-research
         seed: --seed
       output_dir_flag: --output-dir
+      exclude: [joined.mp4, clips]
       outputs:
-        video: "{output_dir}/*.mp4"
-        story: "{output_dir}/story.json"
-        research: "{output_dir}/research.json"
+        video: "{output_dir}/**/*.mp4"
+        story: "{output_dir}/**/story.json"
+        research: "{output_dir}/**/research.json"
     failure_modes:
       - Missing API key stops the run before any media is produced.
       - Provider throttling and timeouts are retried (--api-attempts), then the run fails.

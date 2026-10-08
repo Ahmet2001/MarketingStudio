@@ -14,7 +14,7 @@ Adding a `capability.yaml` never changes the code it describes. If the file is d
 | [engines/product-ads/capability.yaml](../engines/product-ads/capability.yaml) | `ad.creative.generate`, `ad.creative.revise`, `ad.creative.approve` |
 | [connectors/capability.yaml](../connectors/capability.yaml) | `social.search.*`, `social.publish.*` |
 
-Check every file with `python scripts/validate_capabilities.py`.
+Check every file with `python -m studio check` (or `python scripts/validate_capabilities.py`). Any folder can be checked with `--sources`.
 
 ## File shape
 
@@ -55,10 +55,10 @@ capabilities:
 
 ### Execution types
 
-- **cli:** `cwd`, `command` (list), `positional` (input names in order), `flags` (input name to flag), `output_dir_flag`, and `outputs` mapping each output to a path pattern.
+- **cli:** `cwd` (relative to the folder holding the `capability.yaml`), `command` (list), `positional` (input names in order), `flags` (input name to flag; booleans add the flag only when true), `output_dir_flag`, `outputs` mapping each output to a path pattern (`{output_dir}` and `**` are supported; the newest match wins), and optional `exclude` (file or folder names to ignore).
 - **http:** `base_url_env` or `base_url`, and an `operations` list (`method`, `path`).
-- **python:** `module` and `function` per capability, for the connectors.
-- **workflow:** `definition`, the path of a `workflow.yaml` next to the file. See below.
+- **python:** `module`, `function`, and optional `path` (a folder, relative to the `capability.yaml`, that must be importable; default `.`).
+- **workflow:** `definition`, the path of a `workflow.yaml` relative to the file. See below.
 
 ### Permissions
 

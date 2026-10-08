@@ -3,6 +3,8 @@
     python -m studio capabilities [--sources DIR ...]
     python -m studio validate workflow.yaml [--sources DIR ...] [--allow-unknown]
     python -m studio export workflow.yaml --out DIR [--sources DIR ...] [--allow-unknown]
+    python -m studio check [--sources DIR ...]
+    python -m studio run workflow.yaml [--input name=value ...] [--approve STEP ...] [--workdir DIR]
 """
 
 from __future__ import annotations
@@ -11,7 +13,10 @@ import argparse
 import sys
 from pathlib import Path
 
+from datetime import datetime
+
 from .registry import RegistryError, default_sources, load_registry
+from .runner import RunError, run_workflow
 from .workflow import WorkflowError, analyze, build_files, load_workflow
 
 
@@ -31,13 +36,26 @@ def main(argv: list[str] | None = None) -> int:
     p_export.add_argument("workflow", type=Path)
     p_export.add_argument("--out", type=Path, required=True)
     common(p_export)
+    p_check = sub.add_parser("check", help="Check capability files in the sources, including that the files they point to exist.")
+    common(p_check)
+    p_run = sub.add_parser("run", help="Run a workflow on this machine.")
+    p_run.add_argument("workflow", type=Path)
+    p_run.add_argument("--input", action="append", default=[], metavar="NAME=VALUE")
+    p_run.add_argument("--approve", nargs="+", default=[], metavar="STEP", help="Steps allowed to write to the outside world.")
+    p_run.add_argument("--approve-all", action="store_true", help="Approve every gated step without asking.")
+    p_run.add_argument("--workdir", type=Path, help="Where step outputs go. Default: ./runs/<time>.")
+    common(p_run)
     args = parser.parse_args(argv)
 
     try:
-        registry = load_registry(args.sources)
+        registry = load_registry(args.sources, check_paths=args.command == "check")
     except RegistryError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
+
+    if args.command == "check":
+        print(f"{len(registry)} capabilities from {len(args.sources or default_sources())} source(s), no problems.")
+        return 0
 
     if args.command == "capabilities":
         for cid, cap in sorted(registry.items()):
@@ -50,6 +68,45 @@ def main(argv: list[str] | None = None) -> int:
     except WorkflowError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
+    if args.command == "run":
+        analysis = analyze(doc, registry)
+        if analysis.errors:
+            for line in analysis.errors:
+                print(f"ERROR   {line}", file=sys.stderr)
+            return 1
+        given = {}
+        for item in args.input:
+            name, sep, value = item.partition("=")
+            if not sep:
+                print(f"error: --input needs NAME=VALUE, got {item!r}", file=sys.stderr)
+                return 1
+            given[name] = value
+        specs = doc["workflow"].get("inputs") or {}
+        from .runner import parse_input
+        try:
+            typed = {k: parse_input(specs[k], v) if k in specs else v for k, v in given.items()}
+        except RunError as error:
+            print(f"error: {error}", file=sys.stderr)
+            return 1
+
+        def approve(step_id: str, cap: dict) -> bool:
+            if args.approve_all or step_id in args.approve:
+                return True
+            if sys.stdin.isatty():
+                answer = input(f"Step '{step_id}' ({cap['id']}) changes something outside this machine. Run it? [y/N] ")
+                return answer.strip().lower() in {"y", "yes"}
+            return False
+
+        workdir = args.workdir or Path("runs") / datetime.now().strftime("%Y%m%d_%H%M%S")
+        try:
+            result = run_workflow(doc, registry, typed, workdir, approve=approve, log=print)
+        except (RunError, WorkflowError) as error:
+            print(f"error: {error}", file=sys.stderr)
+            return 2
+        for name, value in result.outputs.items():
+            print(f"{name}: {value}")
+        return 0
+
     if args.command == "validate":
         analysis = analyze(doc, registry, allow_unknown=args.allow_unknown)
         for line in analysis.errors:

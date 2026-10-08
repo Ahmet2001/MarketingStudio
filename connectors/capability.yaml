@@ -1,5 +1,10 @@
 # Social connectors. Every function named here exists in the matching *_toolbox.py.
 # All publish capabilities change state outside this machine, so they require approval.
+#
+# NOT RUNNABLE FROM THIS REPOSITORY YET: every toolbox imports
+# `.araclar.browser_araclari` and selenium, and the `araclar` package is not part
+# of this repository. The descriptions below match the function signatures, but the
+# functions cannot be imported here until that package is provided.
 spec_version: "0.1"
 capabilities:
   # ---------- search (read only) ----------
@@ -7,7 +12,7 @@ capabilities:
     version: 0.1.0
     title: Search Reddit posts
     description: Searches Reddit posts through the official Data API, optionally inside one subreddit.
-    status: working
+    status: experimental
     inputs:
       query: {type: text, required: true}
       subreddit: {type: text, default: ""}
@@ -23,8 +28,9 @@ capabilities:
       hardware: []
     permissions: {network: true, writes_external_state: false, requires_approval: false}
     cost: {estimate_usd: 0, notes: Subject to Reddit API rate limits.}
-    execution: {type: python, module: connectors.reddit_toolbox, function: search_reddit_api_posts}
+    execution: {type: python, path: "..", module: connectors.reddit_toolbox, function: search_reddit_api_posts}
     failure_modes:
+      - "Cannot be imported until the missing araclar.browser_araclari package is provided."
       - Missing credentials or user agent.
       - Rate limited by Reddit.
 
@@ -32,7 +38,7 @@ capabilities:
     version: 0.1.0
     title: Search X posts
     description: Searches recent X posts through the official API.
-    status: working
+    status: experimental
     inputs:
       query: {type: text, required: true}
       max_results: {type: integer, default: 10}
@@ -46,15 +52,16 @@ capabilities:
       hardware: []
     permissions: {network: true, writes_external_state: false, requires_approval: false}
     cost: {estimate_usd: null, notes: Depends on the X API plan.}
-    execution: {type: python, module: connectors.x_toolbox, function: search_x_api_posts}
+    execution: {type: python, path: "..", module: connectors.x_toolbox, function: search_x_api_posts}
     failure_modes:
+      - "Cannot be imported until the missing araclar.browser_araclari package is provided."
       - Missing bearer token or insufficient API plan.
 
   - id: social.search.youtube
     version: 0.1.0
     title: Search YouTube
     description: Searches YouTube videos, channels or playlists through the Data API.
-    status: working
+    status: experimental
     inputs:
       query: {type: text, required: true}
       resource_type: {type: text, default: video}
@@ -70,8 +77,9 @@ capabilities:
       hardware: []
     permissions: {network: true, writes_external_state: false, requires_approval: false}
     cost: {estimate_usd: 0, notes: Uses YouTube Data API quota units.}
-    execution: {type: python, module: connectors.youtube_toolbox, function: search_youtube_api}
+    execution: {type: python, path: "..", module: connectors.youtube_toolbox, function: search_youtube_api}
     failure_modes:
+      - "Cannot be imported until the missing araclar.browser_araclari package is provided."
       - Daily API quota exhausted.
 
   # ---------- publish (writes external state, needs approval) ----------
@@ -79,7 +87,7 @@ capabilities:
     version: 0.1.0
     title: Post text to Reddit
     description: Submits a text post to a subreddit through the official API.
-    status: working
+    status: experimental
     inputs:
       subreddit: {type: text, required: true}
       title: {type: text, required: true}
@@ -95,15 +103,16 @@ capabilities:
       hardware: []
     permissions: {network: true, writes_external_state: true, requires_approval: true}
     cost: {estimate_usd: 0, notes: Subject to subreddit rules and API rate limits.}
-    execution: {type: python, module: connectors.reddit_toolbox, function: publish_reddit_api_text_post}
+    execution: {type: python, path: "..", module: connectors.reddit_toolbox, function: publish_reddit_api_text_post}
     failure_modes:
+      - "Cannot be imported until the missing araclar.browser_araclari package is provided."
       - Subreddit rules or spam filters reject the post.
 
   - id: social.publish.reddit_link
     version: 0.1.0
     title: Post a link to Reddit
     description: Submits a link post to a subreddit through the official API.
-    status: working
+    status: experimental
     inputs:
       subreddit: {type: text, required: true}
       title: {type: text, required: true}
@@ -119,15 +128,16 @@ capabilities:
       hardware: []
     permissions: {network: true, writes_external_state: true, requires_approval: true}
     cost: {estimate_usd: 0, notes: Subject to subreddit rules and API rate limits.}
-    execution: {type: python, module: connectors.reddit_toolbox, function: publish_reddit_api_link_post}
+    execution: {type: python, path: "..", module: connectors.reddit_toolbox, function: publish_reddit_api_link_post}
     failure_modes:
+      - "Cannot be imported until the missing araclar.browser_araclari package is provided."
       - Subreddit rules or spam filters reject the post.
 
   - id: social.publish.x_post
     version: 0.1.0
     title: Publish an X post
     description: Publishes a post on X through the official API with user-context credentials.
-    status: working
+    status: experimental
     inputs:
       text: {type: text, required: true}
       reply_to_tweet_id: {type: text, default: ""}
@@ -141,15 +151,16 @@ capabilities:
       hardware: []
     permissions: {network: true, writes_external_state: true, requires_approval: true}
     cost: {estimate_usd: null, notes: Depends on the X API plan.}
-    execution: {type: python, module: connectors.x_toolbox, function: publish_x_api_post}
+    execution: {type: python, path: "..", module: connectors.x_toolbox, function: publish_x_api_post}
     failure_modes:
+      - "Cannot be imported until the missing araclar.browser_araclari package is provided."
       - Duplicate or over-length text is rejected by X.
 
   - id: social.publish.youtube_video
     version: 0.1.0
     title: Upload a YouTube video
     description: Uploads a local video file to YouTube through the Data API. Defaults to private.
-    status: working
+    status: experimental
     inputs:
       video_path: {type: "file:mp4", required: true}
       title: {type: text, required: true}
@@ -166,15 +177,16 @@ capabilities:
       hardware: []
     permissions: {network: true, writes_external_state: true, requires_approval: true}
     cost: {estimate_usd: 0, notes: Upload consumes a large block of daily quota units.}
-    execution: {type: python, module: connectors.youtube_toolbox, function: upload_youtube_api_video}
+    execution: {type: python, path: "..", module: connectors.youtube_toolbox, function: upload_youtube_api_video}
     failure_modes:
+      - "Cannot be imported until the missing araclar.browser_araclari package is provided."
       - Quota exhausted or unverified API project forces uploads to private.
 
   - id: social.publish.instagram_reel
     version: 0.1.0
     title: Publish an Instagram Reel
     description: Creates, waits for and publishes a Reel from a public video URL through the Instagram API.
-    status: working
+    status: experimental
     inputs:
       video_url: {type: url, required: true, description: Public HTTPS URL of the video, not a local path.}
       caption: {type: text, default: ""}
@@ -189,6 +201,7 @@ capabilities:
       hardware: []
     permissions: {network: true, writes_external_state: true, requires_approval: true}
     cost: {estimate_usd: 0, notes: Limited by the account's daily publishing limit.}
-    execution: {type: python, module: connectors.instagram_toolbox, function: publish_instagram_api_reel}
+    execution: {type: python, path: "..", module: connectors.instagram_toolbox, function: publish_instagram_api_reel}
     failure_modes:
+      - "Cannot be imported until the missing araclar.browser_araclari package is provided."
       - Instagram cannot fetch the video URL, or processing times out.

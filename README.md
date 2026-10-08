@@ -166,7 +166,7 @@ Large toolboxes (roughly 8,000 lines in total) for working with social platforms
 | [instagram_toolbox.py](connectors/instagram_toolbox.py) | Search, publish posts, create image and reel containers, comment, message |
 | [youtube_toolbox.py](connectors/youtube_toolbox.py) | Search, publish videos, comment, reply, create playlists |
 
-Use them for low-volume, supervised work and follow each platform's terms and rate limits. `connectors/main.py` is an agent entry point that imports a `MarketingApp` package which is not in this repository yet, so it does not run as-is; the toolboxes themselves are importable.
+Use them for low-volume, supervised work and follow each platform's terms and rate limits. `connectors/main.py` is an agent entry point that imports a `MarketingApp` package which is not in this repository yet, so it does not run as-is. The toolboxes have the same problem: each imports `.araclar.browser_araclari` (and needs `selenium`), a package that is not in this repository, so they cannot be imported here until it is provided.
 
 ---
 
@@ -181,9 +181,10 @@ pip install pyyaml
 python -m studio validate examples/workflows/parallel_videos.yaml
 python -m studio export examples/workflows/story_to_youtube.yaml --out ./exported
 python -m studio capabilities --sources ./my_tools ~/shared_pool     # any sources you choose
+python -m studio run workflow.yaml --sources ./my_tools --input topic="..."   # run it locally
 ```
 
-Guide: [docs/workflows.md](docs/workflows.md). Validate all capability files with `python scripts/validate_capabilities.py`.
+Guide: [docs/workflows.md](docs/workflows.md). Check capability files from any folder with `python -m studio check --sources DIR`.
 
 ## Setup requirements
 

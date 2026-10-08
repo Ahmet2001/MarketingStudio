@@ -40,7 +40,7 @@ capabilities:
       notes: Not measured. REPLICATE_API_TOKEN is only needed when visual_source is generated. WIKIMEDIA_USER_AGENT is optional contact info for Wikimedia requests.
     execution:
       type: cli
-      cwd: engines/documentary-video
+      cwd: .
       command: [python, main.py]
       positional: [topic]
       flags:
@@ -52,11 +52,12 @@ capabilities:
         skip_research: --skip-research
         seed: --seed
       output_dir_flag: --output-dir
+      exclude: [joined.mp4, clips]
       outputs:
-        video: "{output_dir}/*.mp4"
-        script: "{output_dir}/explainer.json"
-        research: "{output_dir}/research.json"
-        photo_credits: "{output_dir}/real_photo_credits.txt"
+        video: "{output_dir}/**/*.mp4"
+        script: "{output_dir}/**/explainer.json"
+        research: "{output_dir}/**/research.json"
+        photo_credits: "{output_dir}/**/real_photo_credits.txt"
     failure_modes:
       - Scenes with no licensed photo match fall back to broader queries; a weak archive can still leave scenes with poor matches.
       - "{output_dir} also contains joined.mp4 and intermediate clips; pick the file named after the topic slug."

@@ -20,7 +20,7 @@ import os
 from pathlib import Path
 from typing import Iterable
 
-import yaml
+from .check import check_file
 
 SKIP_DIRS = {"node_modules", ".venv", ".git", "__pycache__"}
 ENV_SOURCES = "STUDIO_CAPABILITY_SOURCES"
@@ -57,22 +57,33 @@ def _files(source: Path) -> list[Path]:
     )
 
 
-def load_registry(sources: Iterable[Path | str] | None = None) -> Registry:
+def load_registry(
+    sources: Iterable[Path | str] | None = None, *, check_paths: bool = False
+) -> Registry:
+    """Load every capability from the sources.
+
+    Malformed files are rejected with every problem listed. ``check_paths``
+    additionally requires the files an execution points to (cwd, module,
+    workflow definition) to exist.
+    """
+
     registry = Registry()
+    problems: list[str] = []
     for source in [Path(s) for s in sources] if sources else default_sources():
         for path in _files(source):
-            try:
-                data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-            except yaml.YAMLError as error:
-                raise RegistryError(f"{path}: not valid YAML ({error})") from error
-            for capability in data.get("capabilities") or []:
+            caps, errors = check_file(path, check_paths=check_paths)
+            problems += errors
+            for capability in caps:
                 cid = capability.get("id")
                 if not cid:
-                    raise RegistryError(f"{path}: a capability has no id.")
+                    continue
                 if cid in registry:
-                    raise RegistryError(
+                    problems.append(
                         f"Capability '{cid}' is defined twice: {registry.origin[cid]} and {path}."
                     )
+                    continue
                 registry[cid] = capability
                 registry.origin[cid] = path
+    if problems:
+        raise RegistryError("\n".join(problems))
     return registry

@@ -38,7 +38,7 @@ capabilities:
       notes: Runs on local hardware; no per-run API cost. Needs an Ollama server on localhost:11434 with the model pulled.
     execution:
       type: cli
-      cwd: engines/local-image
+      cwd: .
       command: [python, story_image_pipeline.py]
       positional: []
       flags:
