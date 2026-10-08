@@ -38,9 +38,35 @@ Only the rules the capabilities themselves state:
 3. The steps contain no cycle.
 4. A step whose capability writes to the outside world always requires approval, and `approval: none` on it is an error.
 
+## An engine in one file
+
+You do not need a `capability.yaml` for your own code. A Python file with a `CAPABILITY` (or `CAPABILITIES`) literal is an engine. The whole system is then two files: the engine and the workflow. See [examples/single_file](../examples/single_file).
+
+```python
+# engine.py
+from pathlib import Path
+
+CAPABILITY = {
+    "id": "my.word_count",
+    "description": "Counts the words in a text file.",
+    "network": False,
+    "writes_external_state": False,
+}
+
+def word_count(source: Path) -> int:
+    return len(source.read_text().split())
+```
+
+- Inputs come from the parameters: the annotation is the type (`str`, `int`, `float`, `bool`, `list`, `dict`, `Path` for a file, `Literal["a", "b"]` for a choice), and a default makes the input optional.
+- The output is the return annotation, named `result`. Return a dict and list `"outputs"` for several.
+- Optional keys: `title`, `version`, `status`, `function`, `env`, `binaries`, `packages`, `hardware`, `estimate_usd`, `failure_modes`, or full `inputs` and `outputs` to override what is derived.
+- **Leave out `network` or `writes_external_state` and the factory assumes the risky answer** (network yes, writes externally yes, so approval is required). Say `False` when it is true.
+- The file is read as text and is never executed when the factory loads it, so adding a source cannot run anyone's code. It only runs when a workflow that uses it runs.
+- Several files with the same name (`engine.py`) in different folders are fine.
+
 ## Where capabilities come from
 
-Anywhere you say. A source is a directory (searched for `capability.yaml`) or a single file, and you can combine as many as you like:
+Anywhere you say. A source is a directory (searched for `capability.yaml` files and single-file engines) or a single file, and you can combine as many as you like:
 
 ```bash
 python -m studio capabilities --sources ./my_tools ~/shared_pool ./engines

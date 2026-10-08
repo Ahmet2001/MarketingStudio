@@ -1,0 +1,19 @@
+# The second file of the system. Run it with:
+#   python -m studio run examples/single_file/workflow.yaml --sources examples/single_file \
+#       --input source=README.md --input title="Read this"
+spec_version: "0.1"
+workflow:
+  id: file_headline
+  name: File headline
+  inputs:
+    source: {type: "file:any", required: true}
+    title: {type: text, required: true}
+  steps:
+    - id: count
+      capability: demo.word_count
+      with: {source: "{{ inputs.source }}"}
+    - id: head
+      capability: demo.headline
+      with: {text: "{{ inputs.title }}", words: "{{ steps.count.outputs.result }}", style: loud}
+  outputs:
+    headline: "{{ steps.head.outputs.result }}"

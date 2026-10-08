@@ -174,7 +174,7 @@ Use them for low-volume, supervised work and follow each platform's terms and ra
 
 Every engine and connector describes itself in a `capability.yaml` next to its code: what it does, its inputs and outputs, what it needs, whether it changes anything outside the machine (those require approval), and how to run it. See the [capability spec](docs/capability-spec.md).
 
-Workflows are files you write freely: any number of steps, branches and parallel steps, using any capability from any source. They are not tied to a fixed template or to the Marketing Assets Pool. The factory checks them and exports each one as a new capability:
+Your own engine can be one Python file with a `CAPABILITY` literal (inputs and outputs come from the function signature), so a whole system is two files: the engine and the workflow ([example](examples/single_file)). Workflows are files you write freely: any number of steps, branches and parallel steps, using any capability from any source. They are not tied to a fixed template or to the Marketing Assets Pool. The factory checks them and exports each one as a new capability:
 
 ```bash
 pip install pyyaml

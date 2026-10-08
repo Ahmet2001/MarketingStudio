@@ -16,6 +16,8 @@ Adding a `capability.yaml` never changes the code it describes. If the file is d
 
 Check every file with `python -m studio check` (or `python scripts/validate_capabilities.py`). Any folder can be checked with `--sources`.
 
+> Your own code does not need this file: a Python file with a `CAPABILITY` literal describes itself. See [workflows.md](workflows.md#an-engine-in-one-file). Both forms end up as the same capability.
+
 ## File shape
 
 ```yaml

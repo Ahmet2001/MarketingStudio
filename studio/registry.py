@@ -1,7 +1,7 @@
 """Capability registry built from open, configurable sources.
 
-A source is a directory (scanned recursively for ``capability.yaml``) or a
-single capability file. Sources are listed by the operator:
+A source is a directory (scanned recursively for ``capability.yaml`` and for
+single-file engines, see ``engine_file``) or a single such file. Sources are listed by the operator:
 
 * ``--sources`` on the command line, or
 * the ``STUDIO_CAPABILITY_SOURCES`` environment variable (``os.pathsep`` separated), or
@@ -20,7 +20,8 @@ import os
 from pathlib import Path
 from typing import Iterable
 
-from .check import check_file
+from .check import check_capability, check_file
+from .engine_file import EngineFileError, extract, mentions_capability
 
 SKIP_DIRS = {"node_modules", ".venv", ".git", "__pycache__"}
 ENV_SOURCES = "STUDIO_CAPABILITY_SOURCES"
@@ -46,15 +47,39 @@ def default_sources() -> list[Path]:
 
 
 def _files(source: Path) -> list[Path]:
+    """capability.yaml files and single-file engines (.py with a CAPABILITY)."""
+
     if source.is_file():
         return [source]
     if not source.is_dir():
         raise RegistryError(f"Capability source '{source}' does not exist.")
-    return sorted(
+    found = [
         path
         for path in source.rglob("capability.yaml")
         if not SKIP_DIRS & set(path.relative_to(source).parts)
-    )
+    ]
+    for path in source.rglob("*.py"):
+        if SKIP_DIRS & set(path.relative_to(source).parts):
+            continue
+        try:
+            if mentions_capability(path.read_text(encoding="utf-8")):
+                found.append(path)
+        except (OSError, UnicodeDecodeError):
+            continue
+    return sorted(found)
+
+
+def _read(path: Path, check_paths: bool) -> tuple[list[dict], list[str]]:
+    if path.suffix == ".py":
+        try:
+            caps = extract(path)
+        except EngineFileError as error:
+            return [], [str(error)]
+        errors: list[str] = []
+        for cap in caps:
+            errors += check_capability(cap, str(path), path.parent, check_paths=check_paths)
+        return caps, errors
+    return check_file(path, check_paths=check_paths)
 
 
 def load_registry(
@@ -71,7 +96,7 @@ def load_registry(
     problems: list[str] = []
     for source in [Path(s) for s in sources] if sources else default_sources():
         for path in _files(source):
-            caps, errors = check_file(path, check_paths=check_paths)
+            caps, errors = _read(path, check_paths)
             problems += errors
             for capability in caps:
                 cid = capability.get("id")

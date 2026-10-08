@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import glob
 import importlib
+import importlib.util
 import json
 import os
 import shutil
@@ -162,6 +163,31 @@ def _run_cli(cap: dict[str, Any], base: Path, values: dict[str, Any], step_dir: 
     }
 
 
+def _load_module(name: str, folder: Path):
+    """Import a capability's module.
+
+    A plain module (one file) is loaded from its own file under a name unique to
+    that file, so two engines both called ``engine.py`` in different folders
+    never share a cached module. Dotted names are imported as packages.
+    """
+
+    candidate = folder / (name.replace(".", "/") + ".py")
+    if "." in name or not candidate.is_file():
+        return importlib.import_module(name)
+    unique = "_studio_engine_" + str(abs(hash(str(candidate))))
+    if unique in sys.modules:
+        return sys.modules[unique]
+    spec = importlib.util.spec_from_file_location(unique, candidate)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[unique] = module
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        sys.modules.pop(unique, None)
+        raise
+    return module
+
+
 def _run_python(cap: dict[str, Any], base: Path, values: dict[str, Any]) -> dict[str, Any]:
     ex = cap["execution"]
     path = str((base / ex.get("path", ".")).resolve())
@@ -169,8 +195,14 @@ def _run_python(cap: dict[str, Any], base: Path, values: dict[str, Any]) -> dict
     if added:
         sys.path.insert(0, path)
     try:
-        function = getattr(importlib.import_module(ex["module"]), ex["function"])
-        result = function(**{k: v for k, v in values.items() if v is not None})
+        function = getattr(_load_module(ex["module"], Path(path)), ex["function"])
+        specs = cap.get("inputs") or {}
+        kwargs = {
+            k: Path(v) if specs.get(k, {}).get("type", "").startswith("file:") and isinstance(v, str) else v
+            for k, v in values.items()
+            if v is not None
+        }
+        result = function(**kwargs)
     except (ImportError, AttributeError) as error:
         raise RunError(f"cannot load {ex['module']}.{ex['function']}: {error}") from error
     finally:
@@ -178,9 +210,15 @@ def _run_python(cap: dict[str, Any], base: Path, values: dict[str, Any]) -> dict
             sys.path.remove(path)
     outputs = cap["outputs"]
     if isinstance(result, dict) and set(outputs) <= set(result):
-        return {name: result[name] for name in outputs}
-    if len(outputs) == 1:
-        return {next(iter(outputs)): result}
+        found = {name: result[name] for name in outputs}
+    elif len(outputs) == 1:
+        found = {next(iter(outputs)): result}
+    else:
+        found = None
+    if found is not None:
+        return {
+            name: str(value) if isinstance(value, Path) else value for name, value in found.items()
+        }
     raise RunError(f"{ex['function']} returned something that does not match outputs {sorted(outputs)}.")
 
 
