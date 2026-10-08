@@ -29,7 +29,7 @@ capabilities:
       story: {type: "file:json", description: Script and scene prompts (story.json).}
       research: {type: "file:json", description: Sources used for the script (research.json).}
     requires:
-      env: [GEMINI_API_KEY, ELEVENLABS_API_KEY, REPLICATE_API_TOKEN]
+      env: [GEMINI_API_KEY, ELEVENLABS_API_KEY, "REPLICATE_API_TOKEN|REPLICATE_API_KEY"]
       binaries: [ffmpeg, ffprobe]
       hardware: []
     permissions:

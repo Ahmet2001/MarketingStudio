@@ -86,7 +86,7 @@ def plan_workflow(doc: dict[str, Any], registry: Registry, *, allow_unknown: boo
             entry["where"] = "inline (single-file engine)" if registry.origin[cap["id"]].suffix == ".py" else f"external ({registry.origin[cap['id']].parent})"
             req = cap.get("requires") or {}
             entry["missing"] = (
-                [f"env {e}" for e in req.get("env", []) if not os.environ.get(e)]
+                [f"env {e}" for e in portable.missing_env(cap, _engine_dir(cap, registry))]
                 + [f"program {b}" for b in req.get("binaries", []) if not shutil.which(b)]
             )
             names = portable.package_names(req.get("packages", []))
@@ -106,6 +106,13 @@ def plan_workflow(doc: dict[str, Any], registry: Registry, *, allow_unknown: boo
             plan["unknown_cost_steps"].append(sid)
         plan["steps"].append(entry)
     return plan
+
+
+def _engine_dir(cap: dict[str, Any], registry: Registry):
+    origin = registry.origin[cap["id"]]
+    if origin.suffix == ".py":
+        return origin.parent
+    return (origin.parent / cap["execution"].get("cwd", ".")).resolve()
 
 
 def format_plan(plan: dict[str, Any]) -> str:

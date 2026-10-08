@@ -275,6 +275,13 @@ def _base_for(cap: dict[str, Any], bases: dict[str, Path]) -> Path:
     return Path(override) if override else bases[cap["id"]]
 
 
+def _engine_dir(cap: dict[str, Any], bases: dict[str, Path]) -> Path | None:
+    try:
+        return (_base_for(cap, bases) / cap["execution"].get("cwd", ".")).resolve()
+    except (KeyError, TypeError):
+        return None
+
+
 def _run_cli(cap: dict[str, Any], base: Path, values: dict[str, Any], step_dir: Path) -> dict[str, Any]:
     ex = cap["execution"]
     argv = [str(part) for part in python_command(ex["command"])]
@@ -375,6 +382,35 @@ PACKAGE_CHECK = (
     "        missing.append(name)\n"
     "print(json.dumps(missing))\n"
 )
+
+
+def dotenv_names(folder: Path) -> set[str]:
+    """Variable names defined in ``folder/.env``. Values are never read out."""
+
+    try:
+        text = (folder / ".env").read_text(encoding="utf-8")
+    except OSError:
+        return set()
+    names = set()
+    for line in text.splitlines():
+        match = re.match(r"\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*\S", line)
+        if match:
+            names.add(match.group(1))
+    return names
+
+
+def missing_env(cap: dict[str, Any], folder: Path | None = None) -> list[str]:
+    """Required variables that are set neither in the environment nor in the engine's ``.env``.
+
+    An entry like ``"A|B"`` is satisfied by either name.
+    """
+
+    known = dotenv_names(folder) if folder else set()
+    missing = []
+    for entry in (cap.get("requires") or {}).get("env", []):
+        if not any(os.environ.get(n) or n in known for n in str(entry).split("|")):
+            missing.append(str(entry).replace("|", " or "))
+    return missing
 
 
 def package_names(requirements: list[str]) -> list[str]:
@@ -480,7 +516,7 @@ def run(
     missing = []
     for sid in order:
         cap = capabilities[steps[sid]["capability"]]
-        needed = [e for e in (cap.get("requires") or {}).get("env", []) if not os.environ.get(e)]
+        needed = missing_env(cap, _engine_dir(cap, bases))
         needed += [b for b in (cap.get("requires") or {}).get("binaries", []) if not shutil.which(b)]
         if needed:
             missing.append(f"step '{sid}' needs {', '.join(needed)}")

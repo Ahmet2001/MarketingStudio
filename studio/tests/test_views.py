@@ -32,6 +32,7 @@ def doc(steps, inputs=None):
 def test_plan_reports_order_approval_and_what_is_missing(registry, monkeypatch):
     for name in ("GEMINI_API_KEY", "ELEVENLABS_API_KEY", "REPLICATE_API_TOKEN", "YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN"):
         monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr("studio.portable.dotenv_names", lambda folder: set())
     wf = doc([
         {"id": "story", "capability": "story.video.generate", "with": {"topic": "x"}},
         {"id": "up", "capability": "social.publish.youtube_video", "with": {"video_path": "{{ steps.story.outputs.video }}", "title": "t"}},
@@ -102,3 +103,13 @@ def test_command_line_end_to_end(tmp_path):
     assert planned.returncode == 0 and json.loads(planned.stdout)["steps"][0]["capability"] == "demo.up"
     both = run("plan", str(flow), "--sources", str(tmp_path), "--sources", "examples/single_file")
     assert both.returncode == 0
+
+
+def test_env_alternatives_and_engine_dotenv(tmp_path, monkeypatch):
+    from studio import portable
+    (tmp_path / ".env").write_text("REPLICATE_API_KEY=secret\n# X=1\nEMPTY=\n")
+    cap = {"requires": {"env": ["REPLICATE_API_TOKEN|REPLICATE_API_KEY", "ONLY_ONE", "EMPTY"]}}
+    for name in ("REPLICATE_API_TOKEN", "REPLICATE_API_KEY", "ONLY_ONE", "EMPTY"):
+        monkeypatch.delenv(name, raising=False)
+    assert portable.missing_env(cap, tmp_path) == ["ONLY_ONE", "EMPTY"]
+    assert portable.missing_env(cap, None) == ["REPLICATE_API_TOKEN or REPLICATE_API_KEY", "ONLY_ONE", "EMPTY"]

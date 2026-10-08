@@ -1,0 +1,24 @@
+# Written by `studio new workflow`. Check the wiring: it only connected what was unambiguous.
+spec_version: '0.1'
+workflow:
+  id: story_only
+  name: Story only
+  version: 0.1.0
+  inputs:
+    topic:
+      type: text
+      required: true
+      description: The story topic or premise.
+    duration: {type: integer, default: 45}
+    scenes: {type: integer, default: 7}
+  steps:
+  - id: generate
+    capability: story.video.generate
+    with:
+      topic: '{{ inputs.topic }}'
+      duration: '{{ inputs.duration }}'
+      scenes: '{{ inputs.scenes }}'
+  outputs:
+    video: '{{ steps.generate.outputs.video }}'
+    story: '{{ steps.generate.outputs.story }}'
+    research: '{{ steps.generate.outputs.research }}'
