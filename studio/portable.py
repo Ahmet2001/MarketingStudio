@@ -341,13 +341,21 @@ def _load_module(name: str, folder: Path):
     return module
 
 
-def _run_python(cap: dict[str, Any], base: Path, values: dict[str, Any]) -> dict[str, Any]:
+def _run_python(cap: dict[str, Any], base: Path, values: dict[str, Any], step_dir: Path) -> dict[str, Any]:
+    """Run a Python engine function with the step folder as its working directory.
+
+    Relative files it writes land in the step folder, and returned paths are made absolute.
+    """
+
     ex = cap["execution"]
     path = str((base / ex.get("path", ".")).resolve())
     added = path not in sys.path
     if added:
         sys.path.insert(0, path)
+    previous = os.getcwd()
+    step_dir = step_dir.resolve()
     try:
+        os.chdir(step_dir)
         function = getattr(_load_module(ex["module"], Path(path)), ex["function"])
         specs = cap.get("inputs") or {}
         kwargs = {
@@ -359,6 +367,7 @@ def _run_python(cap: dict[str, Any], base: Path, values: dict[str, Any]) -> dict
     except (ImportError, AttributeError) as error:
         raise RunError(f"cannot load {ex['module']}.{ex['function']}: {error}") from error
     finally:
+        os.chdir(previous)
         if added and path in sys.path:
             sys.path.remove(path)
     outputs = cap["outputs"]
@@ -368,7 +377,10 @@ def _run_python(cap: dict[str, Any], base: Path, values: dict[str, Any]) -> dict
         found = {next(iter(outputs)): result}
     else:
         raise RunError(f"{ex['function']} returned something that does not match outputs {sorted(outputs)}.")
-    return {name: str(value) if isinstance(value, Path) else value for name, value in found.items()}
+    return {
+        name: str(value if value.is_absolute() else step_dir / value) if isinstance(value, Path) else value
+        for name, value in found.items()
+    }
 
 
 PACKAGE_NAME_RE = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
@@ -557,7 +569,7 @@ def run(
             if kind == "cli":
                 outputs = _run_cli(cap, base, resolved, step_dir)
             elif kind == "python":
-                outputs = _run_python(cap, base, resolved)
+                outputs = _run_python(cap, base, resolved, step_dir)
             elif kind == "workflow":
                 if nested_loader is None or _depth >= 8:
                     raise RunError("nested workflows are not available here, or are nested too deeply.")

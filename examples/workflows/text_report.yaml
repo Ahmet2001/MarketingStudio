@@ -1,0 +1,31 @@
+# Two independent steps (count, keywords) run first; headline and report need them.
+# python -m studio run examples/workflows/text_report.yaml \
+#   --sources examples/single_file examples/text_report \
+#   --input source=README.md --input title="Repo summary"
+spec_version: "0.1"
+workflow:
+  id: text_report
+  name: Text report
+  inputs:
+    source: {type: "file:any", required: true}
+    title: {type: text, required: true}
+  steps:
+    - id: count
+      capability: demo.word_count
+      with: {source: "{{ inputs.source }}"}
+    - id: words
+      capability: text.keywords
+      with: {source: "{{ inputs.source }}", top: 6}
+    - id: head
+      capability: demo.headline
+      with: {text: "{{ inputs.title }}", words: "{{ steps.count.outputs.result }}"}
+    - id: write
+      capability: text.report
+      with:
+        title: "{{ inputs.title }}"
+        keywords: "{{ steps.words.outputs.result }}"
+        summary: "{{ steps.head.outputs.result }}"
+        out: report.md
+  outputs:
+    report: "{{ steps.write.outputs.result }}"
+    headline: "{{ steps.head.outputs.result }}"

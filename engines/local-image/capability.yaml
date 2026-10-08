@@ -29,6 +29,7 @@ capabilities:
       env: []
       binaries: []
       hardware: [cuda-gpu]
+      packages: [torch, diffusers, requests]
     permissions:
       network: false
       writes_external_state: false

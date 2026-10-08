@@ -224,3 +224,18 @@ def test_studio_python_replaces_a_bare_python_command(tools, tmp_path, monkeypat
         run_workflow(doc, reg, {}, tmp_path / "r1")
     monkeypatch.setenv("STUDIO_PYTHON", PY)
     assert run_workflow(doc, reg, {}, tmp_path / "r2").outputs["o"] == "HI"
+
+
+def test_python_engine_writes_into_its_step_folder(tmp_path):
+    import subprocess, sys
+    root = Path(__file__).resolve().parents[2]
+    work = tmp_path / "w"
+    done = subprocess.run(
+        [sys.executable, "-m", "studio", "run", "examples/workflows/text_report.yaml",
+         "--sources", "examples/single_file", "examples/text_report",
+         "--input", "source=README.md", "--input", "title=T", "--workdir", str(work)],
+        cwd=root, capture_output=True, text=True,
+    )
+    assert done.returncode == 0, done.stderr
+    assert (work / "write" / "report.md").is_file()
+    assert not (root / "report.md").exists()
