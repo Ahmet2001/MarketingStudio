@@ -15,7 +15,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 SKIP_DIRS = {"node_modules", ".venv", ".git", "__pycache__"}
 ID_RE = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$")
-SCALAR_TYPES = {"text", "integer", "number", "boolean", "enum", "url", "list", "object"}
+SCALAR_TYPES = {"any", "text", "integer", "number", "boolean", "enum", "url", "list", "object"}
 STATUSES = {"working", "experimental", "planned"}
 EXEC_TYPES = {"cli", "http", "python", "workflow"}
 REQUIRED = ["id", "version", "title", "description", "status", "inputs", "outputs",

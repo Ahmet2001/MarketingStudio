@@ -1,6 +1,9 @@
-"""Neutral workflow export.
+"""Neutral workflow export for the legacy Storyforge editor.
 
-Turns a saved Storyforge workflow (nodes and edges) into two plain files:
+The general, free-form workflow system lives in the top-level ``studio``
+package. This module only translates the old fixed node types
+(generator / scheduler / destination) into a ``studio`` workflow document and
+hands it to the core. Turns a saved Storyforge workflow (nodes and edges) into two plain files:
 
 * ``workflow.yaml``   - the steps, how they connect, and the inputs they need
 * ``capability.yaml`` - the workflow described as one capability (a tool)
@@ -19,12 +22,14 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from .config import WORKSPACE_ROOT
 
+if str(WORKSPACE_ROOT) not in sys.path:
+    sys.path.insert(0, str(WORKSPACE_ROOT))
+
+from studio import WorkflowError, build_files, load_registry  # noqa: E402
+
 SPEC_VERSION = "0.1"
-SKIP_DIRS = {"node_modules", ".venv", ".git", "__pycache__"}
 
 # Bridge from the node subtypes the workflow editor stored to capabilities.
 # `defaults` are capability inputs the mode implies.
@@ -100,17 +105,6 @@ def check_node_capabilities(
     return result
 
 
-def load_registry(root: Path = WORKSPACE_ROOT) -> dict[str, dict[str, Any]]:
-    registry: dict[str, dict[str, Any]] = {}
-    for path in sorted(root.rglob("capability.yaml")):
-        if SKIP_DIRS & set(path.parts):
-            continue
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        for capability in data.get("capabilities") or []:
-            registry[capability["id"]] = capability
-    return registry
-
-
 def slugify(value: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_")
     return slug or "workflow"
@@ -133,15 +127,6 @@ def _reachable(start: str, edges: list[dict[str, Any]]) -> list[str]:
         order.append(node_id)
         pending.extend(targets.get(node_id, []))
     return order
-
-
-def _union(steps: list[dict[str, Any]], key: str) -> list[str]:
-    values: list[str] = []
-    for step in steps:
-        for item in (step.get("requires") or {}).get(key, []):
-            if item not in values:
-                values.append(item)
-    return values
 
 
 def build_export(
@@ -205,7 +190,6 @@ def build_export(
     steps: list[dict[str, Any]] = [
         {"id": "generate", "capability": gen_id, "with": gen_with}
     ]
-    used_caps = [gen_cap]
     outputs: dict[str, dict[str, Any]] = {}
     output_refs: dict[str, str] = {}
     for name, spec in gen_cap["outputs"].items():
@@ -262,19 +246,13 @@ def build_export(
                 "with": pub_with,
             }
         )
-        used_caps.append(pub_cap)
         for name, spec in pub_cap["outputs"].items():
             key = name if name not in outputs else f"publish_{name}"
             outputs[key] = dict(spec)
             output_refs[key] = "{{ steps.publish.outputs.%s }}" % name
 
-    # ---- documents --------------------------------------------------------
+    # ---- hand over to the core ---------------------------------------------
     slug = slugify(workflow["name"])
-    description = (
-        f"Runs: {gen_cap['title']}"
-        + (f", then: {used_caps[1]['title']}" if len(used_caps) > 1 else "")
-        + f" as one step (workflow '{workflow['name']}')."
-    )
     workflow_doc = {
         "spec_version": SPEC_VERSION,
         "workflow": {
@@ -286,51 +264,11 @@ def build_export(
             "outputs": output_refs,
         },
     }
-
-    costs = [c["cost"]["estimate_usd"] for c in used_caps]
-    total_cost = None if any(c is None for c in costs) else sum(costs)
-    writes = any(c["permissions"]["writes_external_state"] for c in used_caps)
-    capability_doc = {
-        "spec_version": SPEC_VERSION,
-        "capabilities": [
-            {
-                "id": f"workflow.{slug}",
-                "version": "0.1.0",
-                "title": workflow["name"],
-                "description": description,
-                "status": "experimental",
-                "inputs": workflow_inputs,
-                "outputs": outputs,
-                "requires": {
-                    "env": _union(used_caps, "env"),
-                    "binaries": _union(used_caps, "binaries"),
-                    "hardware": _union(used_caps, "hardware"),
-                },
-                "permissions": {
-                    "network": any(c["permissions"]["network"] for c in used_caps),
-                    "writes_external_state": writes,
-                    "requires_approval": writes
-                    or any(c["permissions"]["requires_approval"] for c in used_caps),
-                },
-                "cost": {
-                    "estimate_usd": total_cost,
-                    "notes": "Sum of the steps. Unknown (null) when any step has no measured cost.",
-                },
-                "execution": {"type": "workflow", "definition": "workflow.yaml"},
-                "failure_modes": [
-                    f"[{cap['id']}] {mode_text}"
-                    for cap in used_caps
-                    for mode_text in cap["failure_modes"]
-                ],
-            }
-        ],
-    }
-    header = "# Generated by the workflow exporter. Edit the source workflow, not this file.\n"
-    files = {
-        "workflow.yaml": header + yaml.safe_dump(workflow_doc, sort_keys=False, allow_unicode=True),
-        "capability.yaml": header + yaml.safe_dump(capability_doc, sort_keys=False, allow_unicode=True),
-    }
-    return files, warnings
+    try:
+        files, core_warnings = build_files(workflow_doc, registry)
+    except WorkflowError as error:
+        raise ExportError("; ".join(error.errors)) from error
+    return files, warnings + core_warnings
 
 
 def write_export(files: dict[str, str], out_dir: Path) -> list[Path]:

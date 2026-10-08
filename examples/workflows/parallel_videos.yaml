@@ -1,0 +1,19 @@
+# Two videos from one topic, made in parallel. No step is tied to another.
+spec_version: "0.1"
+workflow:
+  id: parallel_videos
+  name: Parallel videos
+  version: 0.1.0
+  description: Makes a story video and a documentary video from the same topic at the same time.
+  inputs:
+    topic: {type: text, required: true}
+  steps:
+    - id: story
+      capability: story.video.generate
+      with: {topic: "{{ inputs.topic }}", duration: 30, scenes: 5}
+    - id: documentary
+      capability: documentary.video.generate
+      with: {topic: "{{ inputs.topic }}", duration: 45}
+  outputs:
+    story_video: "{{ steps.story.outputs.video }}"
+    documentary_video: "{{ steps.documentary.outputs.video }}"

@@ -16,7 +16,7 @@ RUN pip install --no-cache-dir \
 
 COPY . /workspace
 
-ENV PYTHONPATH=/workspace/apps/studio-api
+ENV PYTHONPATH=/workspace/apps/studio-api:/workspace
 WORKDIR /workspace/apps/studio-api
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

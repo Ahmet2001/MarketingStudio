@@ -170,16 +170,20 @@ Use them for low-volume, supervised work and follow each platform's terms and ra
 
 ---
 
-## Capabilities
+## Capabilities and workflows
 
-Every engine and connector describes itself in a `capability.yaml` next to its code: what it does, its inputs and outputs, what it needs, whether it changes anything outside the machine (those require approval), and how to run it. The files do not change how the code runs. See the [capability spec](docs/capability-spec.md) and validate them with:
+Every engine and connector describes itself in a `capability.yaml` next to its code: what it does, its inputs and outputs, what it needs, whether it changes anything outside the machine (those require approval), and how to run it. See the [capability spec](docs/capability-spec.md).
+
+Workflows are files you write freely: any number of steps, branches and parallel steps, using any capability from any source. They are not tied to a fixed template or to the Marketing Assets Pool. The factory checks them and exports each one as a new capability:
 
 ```bash
 pip install pyyaml
-python scripts/validate_capabilities.py
+python -m studio validate examples/workflows/parallel_videos.yaml
+python -m studio export examples/workflows/story_to_youtube.yaml --out ./exported
+python -m studio capabilities --sources ./my_tools ~/shared_pool     # any sources you choose
 ```
 
-A saved Storyforge workflow can be exported as a neutral `workflow.yaml` plus a `capability.yaml` that describes the whole workflow as one tool (`GET /api/workflows/{id}/export`, or `python -m app.exporter <id> --out dir` in `apps/studio-api`). The export depends on nothing but the capability spec; see [docs/capability-spec.md](docs/capability-spec.md#workflows-exported-as-capabilities).
+Guide: [docs/workflows.md](docs/workflows.md). Validate all capability files with `python scripts/validate_capabilities.py`.
 
 ## Setup requirements
 

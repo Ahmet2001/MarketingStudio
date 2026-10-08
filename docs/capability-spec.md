@@ -51,7 +51,7 @@ capabilities:
 
 ### Input and output types
 
-`text`, `integer`, `number`, `boolean`, `enum` (with `values`), `url`, `list`, `object`, and `file:<ext>` (for example `file:mp4`, `file:png`, `file:image`). A workflow may connect an output to an input only when the types match, so `file:mp4` can feed `file:mp4` but not `text`.
+`any` (matches every type), `text`, `integer`, `number`, `boolean`, `enum` (with `values`), `url`, `list`, `object`, and `file:<ext>` (for example `file:mp4`, `file:png`, `file:image`). A workflow may connect an output to an input only when the types match, so `file:mp4` can feed `file:mp4` but not `text`.
 
 ### Execution types
 
@@ -74,6 +74,8 @@ Connector actions are named after the toolbox manifests in `marketing-agent-asse
 - Nothing reads these files yet. They are the contract; wiring `modes.py`, the workflow validator and the agent API to them is the next step.
 
 ## Workflows exported as capabilities
+
+Workflows are written freely as files; see [workflows.md](workflows.md). This section describes what their export contains.
 
 A saved workflow can be exported as two files that depend on nothing but this spec:
 
