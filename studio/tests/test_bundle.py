@@ -190,6 +190,27 @@ def test_external_capabilities_are_recorded_not_copied(tmp_path):
     assert bundle.engines == {}
     assert bundle.manifest["external"][0]["override_env"] == "STUDIO_DIR_X_CLI"
     assert any("must exist on the machine" in w for w in bundle.warnings)
+    assert bundle.bases["x.cli"] == "external/ext" and bundle.manifest["external"][0]["folder"] == "external/ext"
+
+
+def test_nothing_of_the_studio_machine_leaks_into_bundles_or_adapters(tmp_path):
+    secret = tmp_path / "private_user_dir" / "ext"
+    secret.mkdir(parents=True)
+    (secret / "capability.yaml").write_text(yaml.safe_dump({"spec_version": "0.1", "capabilities": [{
+        "id": "x.cli", "version": "0.1.0", "title": "x", "description": "x", "status": "working",
+        "inputs": {}, "outputs": {"o": {"type": "text"}},
+        "requires": {"env": [], "binaries": [], "hardware": []},
+        "permissions": {"network": False, "writes_external_state": False, "requires_approval": False},
+        "cost": {"estimate_usd": 0, "notes": ""},
+        "execution": {"type": "cli", "cwd": ".", "command": ["true"], "outputs": {"o": "{output_dir}/o.txt"}},
+        "failure_modes": []}]}), encoding="utf-8")
+    doc = {"spec_version": "0.1", "workflow": {"id": "uses_cli", "name": "U", "inputs": {}, "steps": [{"id": "a", "capability": "x.cli"}], "outputs": {}}}
+    bundle = build_bundle(doc, load_registry([secret]))
+    texts = list(bundle.files().values()) + list(bundle.warnings)
+    for name, adapter in ADAPTERS.items():
+        files, notes = adapter(bundle)
+        texts += list(files.values()) + notes
+    assert texts and not [t for t in texts if "private_user_dir" in t or str(tmp_path) in t]
 
 
 def test_http_capabilities_and_bad_names_are_refused(setup, tmp_path):

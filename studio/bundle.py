@@ -71,6 +71,17 @@ def env_override(capability_id: str) -> str:
     return "STUDIO_DIR_" + re.sub(r"\W", "_", capability_id).upper()
 
 
+def _folder_name(source: Path, taken: dict[Path, str]) -> str:
+    """The engine folder's own name; a hash suffix keeps two same-named folders apart."""
+
+    if source not in taken:
+        name = re.sub(r"[^\w.-]", "_", source.name) or "engine"
+        if name in taken.values():
+            name += "_" + hashlib.sha1(str(source).encode()).hexdigest()[:6]
+        taken[source] = name
+    return taken[source]
+
+
 def build_bundle(doc: dict[str, Any], registry: Registry) -> Bundle:
     analysis = analyze(doc, registry)
     if analysis.errors:
@@ -82,6 +93,7 @@ def build_bundle(doc: dict[str, Any], registry: Registry) -> Bundle:
     inline: list[str] = []
     external: list[dict[str, str]] = []
     warnings: list[str] = []
+    taken: dict[Path, str] = {}
 
     for step in workflow["steps"]:
         cid = step["capability"]
@@ -102,8 +114,10 @@ def build_bundle(doc: dict[str, Any], registry: Registry) -> Bundle:
             bases[cid] = folder
             inline.append(cid)
         else:
-            bases[cid] = str(origin.parent.resolve())
-            external.append({"capability": cid, "found_at": bases[cid], "override_env": env_override(cid)})
+            # Only the folder's name is recorded, never where it lives on this machine.
+            source = origin.parent.resolve()
+            bases[cid] = "external/" + _folder_name(source, taken)
+            external.append({"capability": cid, "folder": bases[cid], "override_env": env_override(cid)})
 
     capability = build_capability({"workflow": workflow}, analysis, registry)
     packages: list[str] = []
@@ -135,6 +149,7 @@ def build_bundle(doc: dict[str, Any], registry: Registry) -> Bundle:
     for item in external:
         warnings.append(
             f"'{item['capability']}' is not copied into the bundle: it must exist on the machine that runs it "
-            f"(found here at {item['found_at']}; set {item['override_env']} to use another folder)."
+            f"(expected in a folder named '{item['folder'].split('/', 1)[1]}'; "
+            f"set {item['override_env']} to the folder that holds it)."
         )
     return Bundle(manifest, workflow, capabilities, bases, engines, warnings)

@@ -391,6 +391,6 @@ def _needs(manifest: dict) -> str:
         if values:
             out.append(f"- {label}: " + ", ".join(f"`{v}`" for v in values))
     for item in manifest["external"]:
-        out.append(f"- Engine `{item['capability']}` (found at build time in `{item['found_at']}`; "
-                   f"set `{item['override_env']}` if it lives elsewhere)")
+        out.append(f"- Engine `{item['capability']}` (a folder named `{item['folder'].split('/', 1)[1]}`; "
+                   f"set `{item['override_env']}` to the folder that holds it)")
     return "\n".join(out) or "- Nothing beyond Python."

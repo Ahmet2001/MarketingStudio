@@ -234,8 +234,8 @@ def _readme(bundle: Bundle, name: str, env_names: list[str]) -> str:
     if manifest["external"]:
         out += ["## Engines this tool expects on the machine", ""]
         for item in manifest["external"]:
-            out.append(f"- `{item['capability']}` (found at build time in `{item['found_at']}`). "
-                       f"Set `{item['override_env']}` if it lives elsewhere.")
+            out.append(f"- `{item['capability']}` (a folder named `{item['folder'].split('/', 1)[1]}`). "
+                       f"Set `{item['override_env']}` to the folder that holds it.")
         out.append("")
     file_inputs = [n for n, s in manifest["inputs"].items() if is_file(s)]
     if file_inputs:

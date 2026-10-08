@@ -23,7 +23,7 @@ python bundle/portable.py bundle --input topic="..." --approve upload      # run
 Two kinds of step:
 
 - **Inline**: single-file engines. Their source travels in the bundle, so they run anywhere.
-- **External**: command-line engines and the like (for example `story-video`). They are not copied. The bundle records where they were found and checks on the running machine that they exist; `STUDIO_DIR_<CAPABILITY_ID>` points at another folder. An `http` capability, or a capability that is itself a workflow, cannot be bundled yet.
+- **External**: command-line engines and the like (for example `story-video`). They are not copied. The bundle records only the folder's name (`external/<name>`), never where it lives on the Studio machine, so no user name or path leaks. On the running machine, set `STUDIO_DIR_<CAPABILITY_ID>` to the folder that holds the engine; if it is missing the run stops before starting and names that variable. An `http` capability, or a capability that is itself a workflow, cannot be bundled yet.
 
 ## Adapters
 
