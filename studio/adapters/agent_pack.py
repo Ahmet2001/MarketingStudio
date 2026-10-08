@@ -21,7 +21,7 @@ from typing import Any
 import yaml
 
 from ..bundle import Bundle
-from ._common import FILE_FORMS, approve_text, gated, is_file, ordered_inputs
+from ._common import FILE_FORMS, gated, is_file, ordered_inputs
 
 TOOL_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{2,63}$")
 ANNOTATION = {"integer": "int", "number": "float", "boolean": "bool"}
@@ -98,9 +98,35 @@ def _invoke(values, approve):
         return {"status": "error", "error": f"{type(error).__name__}: {error}"}
 
 
+__GATE__
 __FUNCTION__
 '''
 
+
+
+GATE = '''
+import asyncio
+
+_GATE_ACTION = __ACTION__
+_GATE_DESCRIPTION = __GATE_DESCRIPTION__
+_NOT_APPROVED = __NOT_APPROVED__
+
+
+def _host_gate():
+    """The approval gate of the agent app this tool runs in, or None when the host has none."""
+    try:
+        from MarketingApp.environments.approval_runtime import request_tool_approval
+    except Exception:
+        return None
+    return request_tool_approval
+
+
+async def _approved():
+    # The answer comes from the host (a person at its terminal, or whoever queued the job), never from the
+    # model. With no gate the tool refuses: a workflow that writes outside must not run unchecked.
+    gate = _host_gate()
+    return gate is not None and bool(await gate(_GATE_ACTION, _GATE_DESCRIPTION))
+'''
 
 def _annotation(spec: dict[str, Any]) -> str:
     return ANNOTATION.get(spec["type"], "str")
@@ -127,26 +153,33 @@ def _function(name: str, bundle: Bundle) -> str:
         elif spec["type"] in {"list", "object", "any"}:
             detail = f"JSON text. {detail}".strip()
         lines.append(f"        {input_name}: {detail}".rstrip())
+    text = [bundle.manifest["description"], "", "Args:", *[f"    {l.strip()}" for l in lines], ""]
     if gated(bundle):
-        params.append("approve: bool = False")
-        lines.append(f"        approve: {approve_text(bundle)}")
-    text = [bundle.manifest["description"], "", "Args:", *[f"    {l.strip()}" for l in lines], "",
-            "Returns a dict with status 'ok' and the outputs, 'needs_approval', or 'error'."]
+        text += ["This workflow changes something outside the machine. It runs only if whoever started this job approved it",
+                 "beforehand; you cannot grant that yourself. If it answers 'needs_approval', tell the user and stop.", ""]
+    text += ["Returns a dict with status 'ok' and the outputs, 'needs_approval', or 'error'."]
     body = "\n".join(("    " + l) if l else "" for l in text)
     body = body.replace("\\", "\\\\").replace('"""', "'''")
     names = [n for n, _ in ordered_inputs(bundle)]
     call = "{" + ", ".join(f"{n!r}: {n}" for n in names) + "}"
-    approve_arg = "approve" if gated(bundle) else "True"
     annotations = {n: _annotation(spec) for n, spec in ordered_inputs(bundle)}
-    if gated(bundle):
-        annotations["approve"] = "bool"
     annotations["return"] = "dict"
     pinned = "{" + ", ".join(f"{k!r}: {v}" for k, v in annotations.items()) + "}"
+    if gated(bundle):
+        head = f"async def {name}({', '.join(params)}) -> dict:\n"
+        run = (
+            "    if not await _approved():\n"
+            '        return {"status": "needs_approval", "gated_steps": _GATED, "message": _NOT_APPROVED}\n'
+            f"    return await asyncio.to_thread(_invoke, {call}, True)\n\n\n"
+        )
+    else:
+        head = f"def {name}({', '.join(params)}) -> dict:\n"
+        run = f"    return _invoke({call}, True)\n\n\n"
     return (
-        f"def {name}({', '.join(params)}) -> dict:\n"
-        f'    """\n{body}\n    """\n'
-        f"    return _invoke({call}, {approve_arg})\n\n\n"
-        "# An agent may compile this file with `from __future__ import annotations` in force, which turns the\n"
+        head
+        + f'    """\n{body}\n    """\n'
+        + run
+        + "# An agent may compile this file with `from __future__ import annotations` in force, which turns the\n"
         "# annotations above into text and makes every parameter look like a string. Pin the real types.\n"
         f"{name}.__annotations__ = {pinned}\n"
     )
@@ -168,11 +201,24 @@ def agent_pack(bundle: Bundle) -> tuple[dict[str, str], list[str]]:
     }
     from ..bundle import PORTABLE_SOURCE
 
+    gate_code = ""
+    if gated(bundle):
+        steps = ", ".join(f"{g['step']} ({g['capability']})" for g in gated(bundle))
+        gate_code = (
+            GATE.replace("__ACTION__", repr(name))
+            .replace("__GATE_DESCRIPTION__", repr(f"Run the workflow '{name}'. It changes something outside the machine: {steps}."))
+            .replace("__NOT_APPROVED__", repr(
+                f"Not approved: this workflow changes something outside the machine ({steps}), and whoever started this job "
+                "did not approve it (or this agent has no approval gate). Tell the user it needs their approval. "
+                "Do not try to get around it."
+            ))
+        )
     tool = (
-        TEMPLATE.replace("__PORTABLE__", repr(PORTABLE_SOURCE.read_text(encoding="utf-8")))
+        TEMPLATE.replace("__GATE__", gate_code)
+        .replace("__PORTABLE__", repr(PORTABLE_SOURCE.read_text(encoding="utf-8")))
         .replace("__BUNDLE__", repr(json.dumps(embedded, sort_keys=True)))
         .replace("__GATED__", repr(gated(bundle)))
-        .replace("__APPROVE_MESSAGE__", repr(approve_text(bundle) if gated(bundle) else ""))
+        .replace("__APPROVE_MESSAGE__", repr(""))
         .replace("__NAME__", name)
         .replace("__FUNCTION__", _function(name, bundle))
     )
@@ -206,16 +252,16 @@ def agent_pack(bundle: Bundle) -> tuple[dict[str, str], list[str]]:
     if manifest["requires"].get("packages"):
         # The pack format has no place for dependencies; this file is for whoever installs the pack.
         files["requirements.txt"] = "".join(f"{p}\n" for p in bundle.requirements)
-    notes = [
-        "Install by hand on the agent's machine: /agent pack install <this folder>.",
-        "The tool is a single synchronous function; the agent runs it in a worker thread with no time limit.",
-    ]
+    notes = ["Install by hand on the agent's machine: /agent pack install <this folder>."]
     if gated(bundle):
         notes.append(
-            "Approval is enforced by a parameter, not by the agent: the tool refuses to start until it is called with "
-            "approve=true, and its description tells the model to ask the user first. A model that ignores that "
-            "instruction can still pass approve=true."
+            "The tool is async and asks the agent app's own approval gate (MarketingApp.environments.approval_runtime). "
+            "Unattended, the gate approves only what the person or app that queued the job listed in payload.approved_tools; "
+            "at a terminal it asks the person; an agent app without that gate makes the tool refuse to run. "
+            "The model cannot approve: there is no approve argument."
         )
+    else:
+        notes.append("The tool is a single synchronous function; the agent runs it in a worker thread with no time limit.")
     notes += bundle.warnings
     if manifest["requires"].get("packages"):
         notes.append(
@@ -249,7 +295,12 @@ def _readme(bundle: Bundle, name: str, env_names: list[str]) -> str:
                 "Local paths are refused unless the folder is listed in `STUDIO_FILE_ROOTS`. "
                 "Downloads are https only, limited to public hosts and to `STUDIO_MAX_FILE_MB` (default 100).", ""]
     if gated(bundle):
-        out += ["## Approval", "", approve_text(bundle), ""]
+        steps = ", ".join(f"`{g['step']}` ({g['capability']})" for g in gated(bundle))
+        out += ["## Approval", "",
+                f"This workflow changes something outside the machine ({steps}). The tool asks the agent app's approval gate "
+                f"(`MarketingApp.environments.approval_runtime`) before it runs, and the model cannot answer for it. "
+                f"Unattended, put the tool name in the job: `\"approved_tools\": [\"{name}\"]` in the `agent_jobs` payload. "
+                "At a terminal the person is asked. Without such a gate the tool refuses to run.", ""]
     out += ["## Where runs go", "", "`STUDIO_TOOL_HOME` (default: the system temp folder, `studio_tools/`). "
             "Each call gets its own run folder, returned as `run_folder`.", ""]
     return "\n".join(out)
@@ -290,8 +341,9 @@ def agent_bundle(bundle: Bundle) -> tuple[dict[str, str], list[str]]:
     plugin["agents"] = [f"agents/{agent}.yaml"]
     files["plugin.yaml"] = yaml.safe_dump(plugin, sort_keys=False, allow_unicode=True)
     approval = (
-        "- This tool changes something outside the machine. Never set `approve` to true unless the task says in so many words "
-        "that the user approved it.\n"
+        "- This tool changes something outside the machine. It runs only if whoever started this job approved it beforehand, "
+        "and you cannot approve it yourself. If it answers `needs_approval`, tell the user that the workflow needs their "
+        "approval and stop. Do not retry and do not look for another way.\n"
         if gated(bundle) else ""
     )
     files[f"agents/{agent}.yaml"] = yaml.safe_dump(

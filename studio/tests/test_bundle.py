@@ -96,12 +96,36 @@ def test_bundle_runs_from_its_folder_without_studio(setup, tmp_path):
     assert sent.read_text() == "size=5"
 
 
-def run_tool(tool_path: Path, call: str, env_extra: dict, tmp_path: Path) -> dict:
+FAKE_GATE = (
+    "import os\n"
+    "async def request_tool_approval(action_id, description):\n"
+    "    return action_id in os.environ.get('FAKE_APPROVED', '').split(',')\n"
+)
+
+
+def fake_host(tmp_path: Path) -> Path:
+    """A folder that looks like the agent app's approval gate: it approves what FAKE_APPROVED lists."""
+    root = tmp_path / "host"
+    package = root / "MarketingApp" / "environments"
+    package.mkdir(parents=True, exist_ok=True)
+    (root / "MarketingApp" / "__init__.py").write_text("")
+    (package / "__init__.py").write_text("")
+    (package / "approval_runtime.py").write_text(FAKE_GATE)
+    return root
+
+
+def run_tool(tool_path: Path, call: str, env_extra: dict, tmp_path: Path, host: bool = False) -> dict:
+    """Run a call on a generated tool in a clean interpreter. ``host`` puts a fake approval gate on the path."""
     code = textwrap.dedent(f'''
-        import importlib.util, json, inspect
+        import asyncio, importlib.util, json, inspect, sys
+        if {host!r}:
+            sys.path.insert(0, {str(fake_host(tmp_path))!r})
         spec = importlib.util.spec_from_file_location("the_tool", {str(tool_path)!r})
         module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
-        print(json.dumps({call}, default=str))
+        result = {call}
+        if inspect.iscoroutine(result):
+            result = asyncio.run(result)
+        print(json.dumps(result, default=str))
     ''')
     env = {"PATH": "/usr/bin:/bin", "STUDIO_TOOL_HOME": str(tmp_path / "home"), **env_extra}
     done = subprocess.run([sys.executable, "-I", "-c", code], capture_output=True, text=True, env=env, cwd="/")
@@ -115,17 +139,18 @@ def test_agent_pack_files_and_signature(setup, tmp_path):
     assert set(files) == {"plugin.yaml", "tools/size_and_send.py", "env.example", "README.md", "requirements.txt"}  # the engine declares PyYAML
     plugin = yaml.safe_load(files["plugin.yaml"])
     assert plugin["type"] == "tool_pack" and plugin["tools"][0]["file"] == "tools/size_and_send.py"
-    assert any("not by the agent" in n for n in notes)
+    assert any("The model cannot approve" in n for n in notes)
     tool = files["tools/size_and_send.py"]
     assert not any(line.startswith("from __future__") for line in tool.splitlines())
     path = tmp_path / "tool.py"
     path.write_text(tool, encoding="utf-8")
     sig = run_tool(path, "{k: str(v.annotation.__name__) + ':' + str(v.default) for k, v in inspect.signature(module.size_and_send).parameters.items()}", {}, tmp_path)
     assert sig["file"].startswith("str:") and "empty" in sig["file"]
-    assert sig["times"] == "int:1" and sig["loud"] == "bool:False" and sig["approve"] == "bool:False"
-    assert run_tool(path, "inspect.iscoroutinefunction(module.size_and_send)", {}, tmp_path) is False
+    assert sig["times"] == "int:1" and sig["loud"] == "bool:False"
+    assert "approve" not in sig  # the model gets no argument to approve with
+    assert run_tool(path, "inspect.iscoroutinefunction(module.size_and_send)", {}, tmp_path) is True
     doc_text = run_tool(path, "module.size_and_send.__doc__", {}, tmp_path)
-    assert "Ask the user to confirm" in doc_text
+    assert "you cannot grant that yourself" in doc_text
 
 
 def test_agent_bundle_adds_an_agent_that_owns_the_tool(setup):
@@ -141,7 +166,7 @@ def test_agent_bundle_adds_an_agent_that_owns_the_tool(setup):
     assert agent["tools"] == ["size_and_send"] and agent["tool_mode"] == "custom"
     assert agent["system_prompt_file"] == "prompts/size_and_send_agent.md"
     # this workflow writes outside the machine, so the agent is told never to approve on its own
-    assert "Never set `approve` to true" in files["prompts/size_and_send_agent.md"]
+    assert "you cannot approve it yourself" in files["prompts/size_and_send_agent.md"]
     assert "restart it after installing" in files["README.md"] and any("restart the agent" in n for n in notes)
 
 
@@ -184,26 +209,31 @@ def test_generated_tool_end_to_end(setup, tmp_path):
     path = tmp_path / "tool.py"
     path.write_text(files["tools/size_and_send.py"], encoding="utf-8")
     sent = tmp_path / "sent.txt"
-    env = {"SENT_FILE": str(sent)}
     content = base64.b64encode(b"hello").decode()
     ref = json.dumps({"filename": "a.txt", "content_base64": content})
+    call = f"module.size_and_send({ref!r}, prefix='n=')"
 
-    # without approval nothing runs
-    first = run_tool(path, f"module.size_and_send({ref!r}, prefix='n=')", env, tmp_path)
+    # a host with no approval gate: the tool refuses, nothing runs
+    first = run_tool(path, call, {"SENT_FILE": str(sent)}, tmp_path)
     assert first["status"] == "needs_approval" and first["gated_steps"][0]["step"] == "report"
     assert not sent.exists()
 
+    # a gate that approves a different tool does not approve this one
+    other = run_tool(path, call, {"SENT_FILE": str(sent), "FAKE_APPROVED": "something_else"}, tmp_path, host=True)
+    assert other["status"] == "needs_approval" and not sent.exists()
+
+    approved = {"SENT_FILE": str(sent), "FAKE_APPROVED": "size_and_send"}
     # a local path is refused by default
-    second = run_tool(path, "module.size_and_send('/etc/hostname', approve=True)", env, tmp_path)
+    second = run_tool(path, "module.size_and_send('/etc/hostname')", approved, tmp_path, host=True)
     assert second["status"] == "error" and "allowed folders" in second["error"]
 
     # http, private hosts and unresolved assets are refused
     for ref_bad, expect in [("http://example.com/x", "https"), ("https://localhost/x", "private"), ("asset:abc", "resolver")]:
-        bad = run_tool(path, f"module.size_and_send({ref_bad!r}, approve=True)", env, tmp_path)
+        bad = run_tool(path, f"module.size_and_send({ref_bad!r})", approved, tmp_path, host=True)
         assert bad["status"] == "error" and expect in bad["error"], bad
 
-    # approved base64 upload works and the side effect happens
-    done = run_tool(path, f"module.size_and_send({ref!r}, prefix='n=', approve=True)", env, tmp_path)
+    # the host approved this tool: the upload works and the side effect happens
+    done = run_tool(path, call, approved, tmp_path, host=True)
     assert done["status"] == "ok", done
     assert done["outputs"]["bytes"] == 5
     assert sent.read_text() == "n=5"
@@ -320,19 +350,25 @@ def test_tool_keeps_real_types_when_the_agent_compiles_it_with_future_annotation
     done = subprocess.run([sys.executable, "-I", "-c", code], capture_output=True, text=True, cwd="/")
     assert done.returncode == 0, done.stderr
     types = json.loads(done.stdout)
-    assert types == {"file": "str", "prefix": "str", "times": "int", "loud": "bool", "approve": "bool"}
+    assert types == {"file": "str", "prefix": "str", "times": "int", "loud": "bool"}
 
 
-def test_the_text_false_does_not_approve(setup, tmp_path):
+def test_the_model_cannot_approve_with_an_argument(setup, tmp_path):
     _, registry, doc = setup
     files, _ = ADAPTERS["agent-pack"](build_bundle(doc, registry))
     path = tmp_path / "tool.py"
     path.write_text(files["tools/size_and_send.py"], encoding="utf-8")
     ref = json.dumps({"filename": "a.txt", "content_base64": base64.b64encode(b"hi").decode()})
     sent = tmp_path / "sent.txt"
-    for value in ("false", "False", "0", "no", ""):
-        result = run_tool(path, f"module.size_and_send({ref!r}, approve={value!r})", {"SENT_FILE": str(sent)}, tmp_path)
-        assert result["status"] == "needs_approval", (value, result)
+    # no `approve` argument exists, whatever the value
+    for value in ("true", "True", True, 1, "yes"):
+        done = subprocess.run(
+            [sys.executable, "-I", "-c", textwrap.dedent(f'''
+                import importlib.util
+                spec = importlib.util.spec_from_file_location("t", {str(path)!r})
+                module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+                import asyncio; asyncio.run(module.size_and_send({ref!r}, approve={value!r}))
+            ''')],
+            capture_output=True, text=True, env={"PATH": "/usr/bin:/bin", "SENT_FILE": str(sent), "STUDIO_TOOL_HOME": str(tmp_path / "h")}, cwd="/")
+        assert done.returncode != 0 and "unexpected keyword argument 'approve'" in done.stderr, (value, done.stderr)
     assert not sent.exists()
-    ok = run_tool(path, f"module.size_and_send({ref!r}, approve='true')", {"SENT_FILE": str(sent)}, tmp_path)
-    assert ok["status"] == "ok"
