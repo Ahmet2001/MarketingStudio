@@ -6,11 +6,6 @@
 **/outputs
 apps/studio-api/runtime
 apps/studio-api/tests/.runtime
-apps/storyforge-web/node_modules
-apps/storyforge-web/dist
-apps/storyforge-web/*.tsbuildinfo
-apps/storyforge-web/vite.config.js
-apps/storyforge-web/vite.config.d.ts
 engines/story-video/gameplay/*.mp4
 engines/story-video/gameplay/*-parts
 engines/story-video/shutil

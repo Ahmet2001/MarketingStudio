@@ -1,14 +1,13 @@
 # Storyforge
 
 Storyforge combines the existing `Storyteller` and `HistoicalEventExplainer`
-pipelines behind one web application.
+pipelines behind one API. The web frontend was removed; the API is the interface.
 
 ## Architecture
 
-- `frontend/` — React and Vite creator workspace
-- `backend/` — FastAPI project API and persistent SQLite project records
-- `backend/app/tasks.py` — Celery generation task
-- `backend/app/pipeline.py` — safe CLI adapters for both Python engines
+- `apps/studio-api/` — FastAPI project API and persistent SQLite project records
+- `apps/studio-api/app/tasks.py` — Celery generation task
+- `apps/studio-api/app/pipeline.py` — safe CLI adapters for both Python engines
 - Redis — task broker and result backend
 - Celery Beat — one centralized dispatcher for persistent scheduled projects
 
@@ -16,9 +15,8 @@ The working creation modes are AI-photo stories, Reddit/gameplay stories,
 real-image stories, and historical documentaries. Stock-footage and AI-avatar
 modes remain visibly marked as coming soon until they have real workers.
 
-The Workflows workspace lets creators arrange these content generators on a
-visual canvas, connect an optional scheduler and social destination, save the
-automation, and run it again later. A blank generator topic uses the AI prompt
+Workflows are stored as nodes and edges (`/api/workflows`): content generators
+plus an optional scheduler and social destination, saved and run again later. A blank generator topic uses the AI prompt
 assistant automatically. Publishing destinations are validated before a run;
 the final provider upload step remains connector-specific.
 
@@ -32,15 +30,8 @@ the final provider upload step remains connector-specific.
 docker compose up --build
 ```
 
-3. Start the frontend in another terminal:
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Open `http://localhost:5173`.
+3. The API is now available at `http://localhost:8000` (interactive docs at
+   `/docs`).
 
 ## Test without spending API credits
 

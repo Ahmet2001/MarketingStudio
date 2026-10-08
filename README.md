@@ -4,9 +4,7 @@
 
 **Ad creatives, story videos and documentary explainers in one toolkit.**
 
-![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
-![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)
 ![Express](https://img.shields.io/badge/Express-000000?style=for-the-badge&logo=express&logoColor=white)
 ![SQLite](https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white)
 
@@ -27,7 +25,7 @@
 
 </div>
 
-MarketingStudio is a monorepo of four marketing tools that were built separately and now live side by side. Each one solves a different part of the same problem: **making marketing content and getting it in front of people.**
+MarketingStudio is a monorepo of four headless marketing tools (APIs and command-line engines, no web frontends) that were built separately and now live side by side. Each one solves a different part of the same problem: **making marketing content and getting it in front of people.**
 
 > **Read this first:** these are not one single app. They are independent applications with a shared folder layout. Only some of them talk to each other. The [How the pieces fit together](#how-the-pieces-fit-together) section shows exactly which.
 
@@ -35,8 +33,8 @@ MarketingStudio is a monorepo of four marketing tools that were built separately
 
 | # | Application | One-line purpose | You give it | You get | Status |
 |---|---|---|---|---|---|
-| 1 | **[Product Ad Studio](#1-product-ad-studio)** | Turn product photos into ad creatives | Product images, brief | Ad creatives, UGC storyboards, revisions | Working prototype (mock images by default) |
-| 2 | **[Storyforge](#2-storyforge-story--documentary-video-platform)** | Web platform that runs the video engines on a schedule | A topic or an idea | Finished vertical videos | Working, publishing step unfinished |
+| 1 | **[Product Ad Engine](#1-product-ad-engine)** | Turn product photos into ad creatives | Product images, brief | Ad creatives, UGC storyboards, revisions | Working prototype (mock images by default) |
+| 2 | **[Storyforge](#2-storyforge-story--documentary-video-platform)** | API that runs the video engines on a schedule | A topic or an idea | Finished vertical videos | Working, publishing step unfinished |
 | 3 | **[Video engines](#3-video-engines)** | Generate narrated 9:16 videos from a topic | A topic | An MP4 with voice and captions | Working (CLI) |
 | 4 | **[Local image engine](#4-local-image-engine)** | Generate images on your own GPU | A video idea | Storyboard frames (PNG) | Experimental |
 | + | **[Social connectors](#5-social-connectors)** | Search, post and reply on Reddit, X, Instagram, YouTube | Credentials, text, media | Published posts, research data | Library of toolboxes |
@@ -46,12 +44,12 @@ MarketingStudio is a monorepo of four marketing tools that were built separately
 ```mermaid
 flowchart LR
     subgraph Standalone
-        A["Product Ad Studio<br/>apps/studio-web"]
+        A["Product Ad Engine<br/>engines/product-ads"]
         D["Local image engine<br/>engines/local-image"]
         E["Social connectors<br/>connectors"]
     end
     subgraph Storyforge
-        F["Storyforge web<br/>apps/storyforge-web"] --> G["Storyforge API<br/>apps/studio-api"]
+        G["Storyforge API<br/>apps/studio-api"]
         G --> H["Story video engine<br/>engines/story-video"]
         G --> I["Documentary engine<br/>engines/documentary-video"]
     end
@@ -61,61 +59,58 @@ flowchart LR
 ```
 
 - **Solid arrows already work.** Storyforge's API launches the two video engines as subprocesses (see `apps/studio-api/app/pipeline.py`).
-- **Dotted arrows are not wired yet.** Connectors, the local image engine and the Product Ad Studio currently run on their own.
+- **Dotted arrows are not wired yet.** Connectors, the local image engine and the Product Ad Engine currently run on their own.
 - Every component has its own dependencies and its own `.env`. You can use any one of them without the rest.
 
 ## What is inside
 
 | Path | Part of | Stack |
 |---|---|---|
-| [apps/studio-web](apps/studio-web) | Product Ad Studio (React frontend and Express API in `server/`) | React, Vite, Express, SQLite |
-| [apps/studio-api](apps/studio-api) | Storyforge backend | FastAPI, Celery, Redis |
-| [apps/storyforge-web](apps/storyforge-web) | Storyforge frontend | React, Vite |
+| [apps/studio-api](apps/studio-api) | Storyforge API | FastAPI, Celery, Redis |
 | [engines/story-video](engines/story-video) | Video engines | Python |
 | [engines/documentary-video](engines/documentary-video) | Video engines | Python |
 | [engines/local-image](engines/local-image) | Local image engine (includes upstream Ideogram 4 source) | Python, diffusers |
-| [engines/product-ads](engines/product-ads) | Placeholder for extracting the ad engine from `studio-web` | n/a |
+| [engines/product-ads](engines/product-ads) | Product Ad Engine (Express API) | TypeScript, Express, SQLite |
 | [connectors](connectors) | Social connectors | Python |
 | [docs](docs) | Research and architecture notes | Markdown |
 
 ---
 
-## 1. Product Ad Studio
+## 1. Product Ad Engine
 
-**Location:** [apps/studio-web](apps/studio-web) · Full guide: [apps/studio-web/README.md](apps/studio-web/README.md)
+**Location:** [engines/product-ads](engines/product-ads) · Full guide: [engines/product-ads/README.md](engines/product-ads/README.md)
 
-A creative studio for product marketing, in the spirit of AdCreative.ai (see the [research notes](docs/adcreative-research.md)). You upload product photos, create a project, and generate ad creatives. Every generation is saved, can be revised into a child version, and can be approved.
+A headless backend for product marketing creatives, in the spirit of AdCreative.ai (see the [research notes](docs/adcreative-research.md)). You upload product photos through the API, create a project, and generate ad creatives. Every generation is saved, can be revised into a child version, and can be approved.
 
 What it includes:
 
-- Pages for overview, projects, generate, editor, library, videos (UGC storyboards), insights, competitors, integrations and settings.
-- An **AI models** page to connect OpenAI, Anthropic, Gemini, Replicate, fal, Hugging Face, Ollama or any OpenAI-compatible endpoint, and assign them to LLM, VLM, image and video roles. API keys are stored encrypted (AES-256-GCM).
+- REST API for projects, uploads, generations, revisions, approvals and UGC storyboard scenes.
+- A model-provider layer to connect OpenAI, Anthropic, Gemini, Replicate, fal, Hugging Face, Ollama or any OpenAI-compatible endpoint, and assign them to LLM, VLM, image and video roles. API keys are stored encrypted (AES-256-GCM).
 - A SQLite database and local file storage, so projects survive restarts.
 
-**Honest status:** the default provider draws SVG mockups so the whole flow works without paid keys. Real image and video generation needs a provider adapter. There is a demo user instead of real authentication.
+**Honest status:** the default provider draws SVG mockups so the whole flow works without paid keys. Real image and video generation needs a provider adapter. There is a demo user instead of real authentication. The original React frontend was removed.
 
 ```bash
-cd apps/studio-web
+cd engines/product-ads
 npm install
-npm run dev        # frontend http://127.0.0.1:4173, API http://127.0.0.1:8787
+npm run dev        # API http://127.0.0.1:8787, health at /api/health
 ```
 
-## 2. Storyforge (story and documentary video platform)
+## 2. Storyforge (story and documentary video API)
 
-**Location:** [apps/studio-api](apps/studio-api) (backend) and [apps/storyforge-web](apps/storyforge-web) (frontend) · Full guide: [docs/storyforge.md](docs/storyforge.md)
+**Location:** [apps/studio-api](apps/studio-api) · Full guide: [docs/storyforge.md](docs/storyforge.md)
 
-A web platform that puts the [video engines](#3-video-engines) behind one interface. Instead of running scripts in a terminal you create projects in a browser, queue them, and let a scheduler run them again later.
+An API that puts the [video engines](#3-video-engines) behind one interface. Instead of running scripts in a terminal you create projects over HTTP, queue them, and let a scheduler run them again later. The web frontend was removed.
 
-- **Creation modes:** AI-photo stories, Reddit and gameplay stories, real-image stories, historical documentaries. Stock-footage and AI-avatar modes are visible but marked *coming soon*.
-- **Workflow canvas:** arrange generators visually, add an optional scheduler and social destination, save, and re-run.
+- **Creation modes:** AI-photo stories, Reddit and gameplay stories, real-image stories, historical documentaries. Stock-footage and AI-avatar modes are listed but marked *coming soon*.
+- **Workflows:** stored as nodes and edges, with an optional scheduler and social destination, saved and re-run through `/api/workflows`.
 - **Prompt assistant:** leave the topic blank and it suggests one.
 - **Stack:** FastAPI for the API, Celery workers for generation, Redis as the queue, Celery Beat for scheduling, SQLite for project records.
 
 **Honest status:** generation works. The last step, uploading to the social platform, is not finished.
 
 ```bash
-docker compose up --build                    # API, Redis, worker, scheduler
-cd apps/storyforge-web && npm install && npm run dev   # http://localhost:5173
+docker compose up --build      # API at http://localhost:8000 (docs at /docs), Redis, worker, scheduler
 ```
 
 ## 3. Video engines
@@ -177,7 +172,7 @@ Use them for low-volume, supervised work and follow each platform's terms and ra
 
 ## Setup requirements
 
-- Node.js 20+ for the web apps
+- Node.js 20+ for the Product Ad Engine
 - Python 3.12+ for engines, connectors and the Storyforge API
 - FFmpeg for the video engines
 - Docker with Compose for Storyforge
@@ -193,7 +188,7 @@ Real `.env` files, generated media (`outputs/`, mp4, wav, mp3), `node_modules`, 
 
 - Shared engine interface so every generator takes and returns the same shape
 - Extract the ad engine into [engines/product-ads](engines/product-ads)
-- Connect real image and video providers to the Product Ad Studio
+- Connect real image and video providers to the Product Ad Engine
 - Wire the connectors into Storyforge for automatic publishing
 - Use the local image engine as a drop-in replacement for Replicate
 
