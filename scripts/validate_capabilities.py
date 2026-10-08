@@ -17,7 +17,7 @@ SKIP_DIRS = {"node_modules", ".venv", ".git", "__pycache__"}
 ID_RE = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$")
 SCALAR_TYPES = {"text", "integer", "number", "boolean", "enum", "url", "list", "object"}
 STATUSES = {"working", "experimental", "planned"}
-EXEC_TYPES = {"cli", "http", "python"}
+EXEC_TYPES = {"cli", "http", "python", "workflow"}
 REQUIRED = ["id", "version", "title", "description", "status", "inputs", "outputs",
             "requires", "permissions", "cost", "execution", "failure_modes"]
 
@@ -68,6 +68,8 @@ def check_capability(cap: dict, where: str, errors: list[str]) -> None:
         for name in (cap.get("outputs") or {}):
             if name not in (execution.get("outputs") or {}):
                 errors.append(f"{where}: output '{name}' has no execution.outputs path")
+    if execution.get("type") == "workflow" and not execution.get("definition"):
+        errors.append(f"{where}: execution.definition is required for workflow capabilities")
     if execution.get("type") == "python":
         module = str(execution.get("module", ""))
         func = str(execution.get("function", ""))

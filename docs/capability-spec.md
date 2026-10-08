@@ -58,6 +58,7 @@ capabilities:
 - **cli:** `cwd`, `command` (list), `positional` (input names in order), `flags` (input name to flag), `output_dir_flag`, and `outputs` mapping each output to a path pattern.
 - **http:** `base_url_env` or `base_url`, and an `operations` list (`method`, `path`).
 - **python:** `module` and `function` per capability, for the connectors.
+- **workflow:** `definition`, the path of a `workflow.yaml` next to the file. See below.
 
 ### Permissions
 
@@ -71,3 +72,29 @@ Connector actions are named after the toolbox manifests in `marketing-agent-asse
 
 - Costs are `null` until measured. No numbers are guessed.
 - Nothing reads these files yet. They are the contract; wiring `modes.py`, the workflow validator and the agent API to them is the next step.
+
+## Workflows exported as capabilities
+
+A saved workflow can be exported as two files that depend on nothing but this spec:
+
+| File | Contains |
+|---|---|
+| `workflow.yaml` | `inputs`, ordered `steps`, and `outputs`. Each step names a `capability`, lists `needs`, passes `with` values, and carries `approval: required` when the capability writes to the outside world. |
+| `capability.yaml` | The whole workflow as one capability (`id: workflow.<name>`, `execution.type: workflow`). Inputs, outputs, `requires`, permissions and failure modes are merged from the steps. |
+
+Values inside `with` and `outputs` use only two reference forms: `"{{ inputs.<name> }}"` and `"{{ steps.<step>.outputs.<name> }}"`.
+
+Merge rules for the generated capability: `requires` is the union of the steps; `writes_external_state` and `network` are true when any step sets them; `requires_approval` is true whenever any step writes externally; `cost.estimate_usd` is the sum, or `null` when any step is unmeasured.
+
+The exporter refuses a workflow instead of guessing: an unknown content generator, a destination with no capability, or a step output whose type does not match the next step's input (for example a local `file:mp4` into an input that needs a public `url`) is an error with an explanation.
+
+Scheduling is not part of an exported tool. Whoever calls the tool decides when it runs, so scheduler nodes are dropped with a warning.
+
+Export through the API (`GET /api/workflows/{id}/export`) or the command line:
+
+```bash
+cd apps/studio-api
+python -m app.exporter <workflow_id> --out ./exported
+```
+
+The exporter has no knowledge of any agent or runtime. Turning these files into something a specific consumer reads is a separate, later step.

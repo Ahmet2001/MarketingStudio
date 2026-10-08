@@ -34,6 +34,7 @@ from .connectors import (
     list_connections,
     require_provider,
 )
+from .exporter import ExportError, build_export
 from .modes import MODES
 from .models import (
     AiModelCreate,
@@ -295,6 +296,17 @@ def _reachable_workflow_nodes(
         reachable.append(nodes_by_id[node_id])
         pending.extend(targets.get(node_id, []))
     return reachable
+
+
+@app.get("/api/workflows/{workflow_id}/export")
+def export_workflow(workflow_id: str) -> dict:
+    """Neutral export: workflow.yaml and capability.yaml as text."""
+    workflow = require_workflow(workflow_id)
+    try:
+        files, warnings = build_export(workflow)
+    except ExportError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return {"files": files, "warnings": warnings}
 
 
 @app.post(

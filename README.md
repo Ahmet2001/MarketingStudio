@@ -179,6 +179,8 @@ pip install pyyaml
 python scripts/validate_capabilities.py
 ```
 
+A saved Storyforge workflow can be exported as a neutral `workflow.yaml` plus a `capability.yaml` that describes the whole workflow as one tool (`GET /api/workflows/{id}/export`, or `python -m app.exporter <id> --out dir` in `apps/studio-api`). The export depends on nothing but the capability spec; see [docs/capability-spec.md](docs/capability-spec.md#workflows-exported-as-capabilities).
+
 ## Setup requirements
 
 - Node.js 20+ for the Product Ad Engine
