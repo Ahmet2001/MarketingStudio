@@ -88,6 +88,17 @@ Merge rules for the generated capability: `requires` is the union of the steps; 
 
 The exporter refuses a workflow instead of guessing: an unknown content generator, a destination with no capability, or a step output whose type does not match the next step's input (for example a local `file:mp4` into an input that needs a public `url`) is an error with an explanation.
 
+### Nodes carry a capability_id
+
+Every workflow node can name the capability it runs with `capability_id` (for example `story.video.generate`). Rules:
+
+- The id must exist in the registry, otherwise saving the workflow fails with a 422 that names it.
+- A content-generator node's id must match its mode, because a run is still driven by the mode. A contradiction is refused instead of silently ignored.
+- Nodes saved without an id get one filled in from their old subtype when the workflow is saved again. Older stored workflows are still exported correctly because the exporter falls back to the same mapping.
+- Config keys on a generator that are inputs of its capability (for example `seed`) are fixed values in the exported step; the common ones (`topic`, `language`, `duration`, `scenes`, `niche`) become workflow inputs.
+
+`GET /api/capabilities` lists the registry and `GET /api/modes` now includes each mode's `capability_id`.
+
 Scheduling is not part of an exported tool. Whoever calls the tool decides when it runs, so scheduler nodes are dropped with a warning.
 
 Export through the API (`GET /api/workflows/{id}/export`) or the command line:

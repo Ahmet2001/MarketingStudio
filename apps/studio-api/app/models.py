@@ -118,6 +118,11 @@ class WorkflowNode(BaseModel):
     id: str = Field(min_length=1, max_length=80)
     kind: WorkflowNodeKind
     subtype: str = Field(min_length=1, max_length=80)
+    capability_id: str | None = Field(
+        default=None,
+        max_length=120,
+        pattern=r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$",
+    )
     label: str = Field(min_length=1, max_length=120)
     x: float = Field(ge=0, le=4000)
     y: float = Field(ge=0, le=2500)

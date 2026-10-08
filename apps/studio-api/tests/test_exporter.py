@@ -152,3 +152,19 @@ def test_export_has_no_consumer_specific_content(registry):
     text = "\n".join(files.values()).lower()
     for word in ("browseragent", "ethgent", "plugin.yaml", "agent pack"):
         assert word not in text
+
+
+def test_explicit_capability_id_is_used(registry):
+    generator = node("g", "content-generator", "documentary")
+    generator["capability_id"] = "documentary.video.generate"
+    files, _ = build_export(workflow([generator]), registry)
+    flow, _ = parse(files)
+    assert flow["steps"][0]["capability"] == "documentary.video.generate"
+
+
+def test_extra_config_matching_an_input_is_fixed_in_the_step(registry):
+    generator = node("g", "content-generator", "ai-photos", {"seed": 7})
+    files, _ = build_export(workflow([generator]), registry)
+    flow, _ = parse(files)
+    assert flow["steps"][0]["with"]["seed"] == 7
+    assert "seed" not in flow["inputs"]

@@ -87,3 +87,40 @@ def test_workflow_requires_one_generator() -> None:
             f"/api/workflows/{created.json()['id']}/run"
         )
         assert response.status_code == 422
+
+
+def test_nodes_get_a_capability_id_and_it_survives_reads():
+    client = TestClient(app)
+    created = client.post("/api/workflows", json=workflow_payload()).json()
+    by_kind = {node["kind"]: node for node in created["nodes"]}
+    assert by_kind["content-generator"]["capability_id"] == "story.video.generate"
+    assert by_kind["scheduler"]["capability_id"] is None
+    stored = client.get("/api/workflows").json()["items"]
+    match = [w for w in stored if w["id"] == created["id"]][0]
+    assert match["nodes"][0]["capability_id"] == "story.video.generate"
+
+
+def test_unknown_capability_id_is_rejected():
+    client = TestClient(app)
+    payload = workflow_payload()
+    payload["nodes"][0]["capability_id"] = "nothing.here"
+    response = client.post("/api/workflows", json=payload)
+    assert response.status_code == 422
+    assert "nothing.here" in response.json()["detail"]
+
+
+def test_capability_id_must_match_the_generator_mode():
+    client = TestClient(app)
+    payload = workflow_payload()
+    payload["nodes"][0]["capability_id"] = "documentary.video.generate"
+    response = client.post("/api/workflows", json=payload)
+    assert response.status_code == 422
+
+
+def test_capabilities_endpoint_lists_the_registry():
+    client = TestClient(app)
+    ids = {item["id"] for item in client.get("/api/capabilities").json()}
+    assert {"story.video.generate", "social.publish.youtube_video"} <= ids
+    modes = {m["id"]: m for m in client.get("/api/modes").json()}
+    assert modes["documentary"]["capability_id"] == "documentary.video.generate"
+    assert modes["avatar"]["capability_id"] is None

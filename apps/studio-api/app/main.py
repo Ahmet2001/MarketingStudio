@@ -34,7 +34,13 @@ from .connectors import (
     list_connections,
     require_provider,
 )
-from .exporter import ExportError, build_export
+from .exporter import (
+    ExportError,
+    build_export,
+    check_node_capabilities,
+    legacy_capability_id,
+    load_registry,
+)
 from .modes import MODES
 from .models import (
     AiModelCreate,
@@ -217,7 +223,28 @@ def delete_ai_model_record(model_id: str) -> dict:
 
 @app.get("/api/modes")
 def modes() -> list[dict]:
-    return [mode.__dict__ for mode in MODES.values()]
+    return [
+        {
+            **mode.__dict__,
+            "capability_id": legacy_capability_id(
+                {"kind": "content-generator", "subtype": mode.id}
+            ),
+        }
+        for mode in MODES.values()
+    ]
+
+
+@app.get("/api/capabilities")
+def capabilities() -> list[dict]:
+    """Every capability described by a capability.yaml in the repository."""
+    return list(load_registry().values())
+
+
+def checked_nodes(payload_nodes: list) -> list[dict]:
+    try:
+        return check_node_capabilities([node.model_dump() for node in payload_nodes])
+    except ExportError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 @app.post("/api/prompts/lucky", response_model=LuckyPromptResponse)
@@ -251,7 +278,7 @@ def workflows() -> WorkflowListResponse:
 def create_workflow_record(payload: WorkflowCreate) -> dict:
     return create_workflow(
         name=payload.name,
-        nodes=[node.model_dump() for node in payload.nodes],
+        nodes=checked_nodes(payload.nodes),
         edges=[edge.model_dump() for edge in payload.edges],
         status=payload.status,
     )
@@ -266,7 +293,7 @@ def update_workflow_record(
     return update_workflow(
         workflow_id,
         name=payload.name,
-        nodes=[node.model_dump() for node in payload.nodes],
+        nodes=checked_nodes(payload.nodes),
         edges=[edge.model_dump() for edge in payload.edges],
         status=payload.status,
     )

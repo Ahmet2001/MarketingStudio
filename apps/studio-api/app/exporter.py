@@ -52,6 +52,54 @@ class ExportError(ValueError):
     """The workflow cannot be exported as described."""
 
 
+def legacy_capability_id(node: dict[str, Any]) -> str | None:
+    """Capability a node implied before nodes carried a capability_id."""
+    if node["kind"] == "content-generator":
+        entry = MODE_CAPABILITIES.get(node["subtype"])
+        return entry[0] if entry else None
+    if node["kind"] == "app-connection":
+        return DESTINATION_CAPABILITIES.get(node["subtype"])
+    return None
+
+
+def resolve_capability_id(node: dict[str, Any]) -> str | None:
+    return node.get("capability_id") or legacy_capability_id(node)
+
+
+def check_node_capabilities(
+    nodes: list[dict[str, Any]],
+    registry: dict[str, dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Validate capability_id on nodes and fill it in from the legacy subtype.
+
+    Returns copies of the nodes with ``capability_id`` set where it can be
+    determined. Raises ``ExportError`` for an unknown capability, or for a
+    generator whose capability disagrees with its mode (a run is still driven
+    by the mode, so the two must not contradict each other).
+    """
+
+    registry = registry if registry is not None else load_registry()
+    result = []
+    for node in nodes:
+        node = dict(node)
+        declared = node.get("capability_id")
+        if declared and declared not in registry:
+            raise ExportError(
+                f"Node '{node['id']}' uses unknown capability '{declared}'."
+            )
+        if declared and node["kind"] == "content-generator":
+            implied = legacy_capability_id(node)
+            if implied and implied != declared:
+                raise ExportError(
+                    f"Node '{node['id']}' has mode '{node['subtype']}' which runs "
+                    f"'{implied}', not '{declared}'."
+                )
+        if not declared:
+            node["capability_id"] = legacy_capability_id(node)
+        result.append(node)
+    return result
+
+
 def load_registry(root: Path = WORKSPACE_ROOT) -> dict[str, dict[str, Any]]:
     registry: dict[str, dict[str, Any]] = {}
     for path in sorted(root.rglob("capability.yaml")):
@@ -118,12 +166,13 @@ def build_export(
 
     # ---- generate step ----------------------------------------------------
     mode = generator["subtype"]
-    if mode not in MODE_CAPABILITIES:
+    gen_id = resolve_capability_id(generator)
+    if gen_id is None:
         raise ExportError(f"No capability exists for content generator '{mode}'.")
-    gen_id, mode_defaults = MODE_CAPABILITIES[mode]
     gen_cap = registry.get(gen_id)
     if gen_cap is None:
         raise ExportError(f"Capability '{gen_id}' is not in the registry.")
+    mode_defaults = dict(MODE_CAPABILITIES.get(mode, (None, {}))[1])
 
     config = generator.get("config") or {}
     workflow_inputs: dict[str, dict[str, Any]] = {}
@@ -146,8 +195,12 @@ def build_export(
             spec["default"] = value
         workflow_inputs[key] = spec
         gen_with[key] = "{{ inputs.%s }}" % key
-    if config.get("skip_research") and "skip_research" in gen_cap["inputs"]:
-        gen_with["skip_research"] = True
+    # Any other config key that is an input of the capability is fixed in the step.
+    for key, value in config.items():
+        if key in GENERATOR_CONFIG_KEYS or key not in gen_cap["inputs"]:
+            continue
+        if value not in (None, ""):
+            gen_with[key] = value
 
     steps: list[dict[str, Any]] = [
         {"id": "generate", "capability": gen_id, "with": gen_with}
@@ -172,13 +225,17 @@ def build_export(
         raise ExportError("Use at most one destination in a workflow path.")
     if destinations:
         destination = destinations[0]["subtype"]
-        pub_id = DESTINATION_CAPABILITIES.get(destination)
+        pub_id = resolve_capability_id(destinations[0])
         if pub_id is None:
             raise ExportError(f"No publish capability exists for destination '{destination}'.")
         pub_cap = registry.get(pub_id)
         if pub_cap is None:
             raise ExportError(f"Capability '{pub_id}' is not in the registry.")
-        bindings = PUBLISH_BINDINGS[pub_id]
+        bindings = PUBLISH_BINDINGS.get(pub_id)
+        if bindings is None:
+            raise ExportError(
+                f"'{pub_id}' cannot be wired after '{gen_id}' yet: no input binding is defined for it."
+            )
         pub_with: dict[str, Any] = {}
         for input_name, output_name in bindings.items():
             produced = gen_cap["outputs"][output_name]["type"]
