@@ -239,6 +239,9 @@ def agent_pack(bundle: Bundle) -> tuple[dict[str, str], list[str]]:
                 "description": manifest["description"],
                 "params_note": json.dumps(example, ensure_ascii=False),
                 "env_vars": env_names,
+                # The agent app reads this and asks its own gate before the call, even when the tool
+                # runs in its sandbox and whatever the tool's own code does.
+                **({"requires_approval": True} if gated(bundle) else {}),
             }
         ],
     }
@@ -255,7 +258,9 @@ def agent_pack(bundle: Bundle) -> tuple[dict[str, str], list[str]]:
     notes = ["Install by hand on the agent's machine: /agent pack install <this folder>."]
     if gated(bundle):
         notes.append(
-            "The tool is async and asks the agent app's own approval gate (MarketingApp.environments.approval_runtime). "
+            "plugin.yaml marks the tool requires_approval: true, so the agent app asks its approval gate before the call "
+            "(also when it runs pack tools in a sandbox); the tool is async and asks that gate itself as well "
+            "(MarketingApp.environments.approval_runtime). "
             "Unattended, the gate approves only what the person or app that queued the job listed in payload.approved_tools; "
             "at a terminal it asks the person; an agent app without that gate makes the tool refuse to run. "
             "The model cannot approve: there is no approve argument."
@@ -297,8 +302,10 @@ def _readme(bundle: Bundle, name: str, env_names: list[str]) -> str:
     if gated(bundle):
         steps = ", ".join(f"`{g['step']}` ({g['capability']})" for g in gated(bundle))
         out += ["## Approval", "",
-                f"This workflow changes something outside the machine ({steps}). The tool asks the agent app's approval gate "
-                f"(`MarketingApp.environments.approval_runtime`) before it runs, and the model cannot answer for it. "
+                f"This workflow changes something outside the machine ({steps}), so `plugin.yaml` marks the tool "
+                f"`requires_approval: true`: the agent app asks its approval gate before the call, and the model cannot "
+                f"answer for it. The tool also asks the gate itself "
+                f"(`MarketingApp.environments.approval_runtime`), which covers an agent app that does not read the mark. "
                 f"Unattended, put the tool name in the job: `\"approved_tools\": [\"{name}\"]` in the `agent_jobs` payload. "
                 "At a terminal the person is asked. Without such a gate the tool refuses to run.", ""]
     out += ["## Where runs go", "", "`STUDIO_TOOL_HOME` (default: the system temp folder, `studio_tools/`). "

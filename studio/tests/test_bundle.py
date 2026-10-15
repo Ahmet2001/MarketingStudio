@@ -139,6 +139,8 @@ def test_agent_pack_files_and_signature(setup, tmp_path):
     assert set(files) == {"plugin.yaml", "tools/size_and_send.py", "env.example", "README.md", "requirements.txt"}  # the engine declares PyYAML
     plugin = yaml.safe_load(files["plugin.yaml"])
     assert plugin["type"] == "tool_pack" and plugin["tools"][0]["file"] == "tools/size_and_send.py"
+    assert plugin["tools"][0]["requires_approval"] is True  # the agent app asks before the call
+    assert "requires_approval: true" in files["README.md"]
     assert any("The model cannot approve" in n for n in notes)
     tool = files["tools/size_and_send.py"]
     assert not any(line.startswith("from __future__") for line in tool.splitlines())
@@ -161,6 +163,7 @@ def test_agent_bundle_adds_an_agent_that_owns_the_tool(setup):
     assert files["tools/size_and_send.py"] == pack_files["tools/size_and_send.py"]  # the same tool file
     plugin = yaml.safe_load(files["plugin.yaml"])
     assert plugin["type"] == "agent_bundle" and plugin["agents"] == ["agents/size_and_send_agent.yaml"]
+    assert plugin["tools"][0]["requires_approval"] is True
     agent = yaml.safe_load(files["agents/size_and_send_agent.yaml"])
     assert agent["name"] == "size_and_send_agent" and agent["type"] == "config" and agent["enabled"] is True
     assert agent["tools"] == ["size_and_send"] and agent["tool_mode"] == "custom"
@@ -194,6 +197,7 @@ def test_agent_packs_without_packages_have_no_requirements_file(tmp_path):
            "steps": [{"id": "a", "capability": "p.size", "with": {"n": "{{ inputs.n }}"}}], "outputs": {"s": "{{ steps.a.outputs.result }}"}}}
     files, _ = ADAPTERS["agent-pack"](build_bundle(doc, load_registry([tmp_path])))
     assert "requirements.txt" not in files
+    assert "requires_approval" not in yaml.safe_load(files["plugin.yaml"])["tools"][0]  # nothing written outside
 
 
 def test_agent_bundle_refuses_a_name_that_cannot_be_an_agent(setup):
