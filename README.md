@@ -27,7 +27,7 @@
 
 MarketingStudio is where capabilities are **made into new capabilities**. You write small engines (often one Python file), join them in a workflow of any shape, check it, run it locally to try it, and export it. The export is a neutral, self-contained bundle. Small adapters reshape the bundle for whoever will run it: an LLM agent, a queue worker, an MCP client.
 
-It is one part of a larger idea: fitting an LLM agent to a system. The Studio is the **factory** that makes the tools; [Ethgent](https://github.com/Ahmet2001/BrowserAgent) is the agent that uses them, [Marketing Agent Assets](https://github.com/Ahmet2001/MarketingPool/tree/main/marketing-agent-assets) is the open pool that connects the agent to a system, and [MarketingPool](https://github.com/Ahmet2001/MarketingPool) is the example where those meet. The reasoning is in the [main manifesto](https://github.com/Ahmet2001/MarketingPool/blob/main/manifesto.md).
+It is one part of a larger idea: fitting an LLM agent to a system. The Studio is the **factory** that makes the tools; [Ethgent](https://github.com/ethosoftai/Ethgent) is the agent that uses them, [Marketing Agent Assets](https://github.com/Ahmet2001/MarketingPool/tree/main/marketing-agent-assets) is the open pool that connects the agent to a system, and [MarketingPool](https://github.com/Ahmet2001/MarketingPool) is the example where those meet. The reasoning is in the [main manifesto](https://github.com/Ahmet2001/MarketingPool/blob/main/manifesto.md).
 
 The Studio depends on none of them. A workflow is not tied to the pool, and an exported workflow runs without the Studio installed.
 
@@ -37,7 +37,7 @@ Four repositories, one idea: **take an LLM agent and fit it to your own system.*
 
 | Repository | Role |
 | --- | --- |
-| [**Ethgent**](https://github.com/Ahmet2001/BrowserAgent) | The customisable agent. An orchestrator LLM, sub-agents and tools that live in YAML and packs. Today it is tuned for social media; the same shape can be tuned for trading, HR or any other domain. |
+| [**Ethgent**](https://github.com/ethosoftai/Ethgent) | The customisable agent. An orchestrator LLM, sub-agents and tools that live in YAML and packs. Today it is tuned for social media; the same shape can be tuned for trading, HR or any other domain. |
 | [**Marketing Agent Assets**](https://github.com/Ahmet2001/MarketingPool/tree/main/marketing-agent-assets) | The integration layer and an open pool. Workers, connectors, tools, schemas and decision guides that plug the agent into *your* system. Nobody owns "the" asset: anyone can add their own tool, connector or worker. |
 | [**MarketingStudio**](https://github.com/Ahmet2001/MarketingStudio) | The factory. Build a workflow once, export it (agent pack, MCP server, worker, ...) and feed it to the agent and the assets. |
 | [**MarketingPool**](https://github.com/Ahmet2001/MarketingPool) | One worked example: the agent and the assets together, with Docker, running on one machine. |

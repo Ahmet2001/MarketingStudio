@@ -93,7 +93,7 @@ Humans and agents may one day be two creators using the same infrastructure. Onl
 
 MarketingStudio is responsible for designing, validating, and exporting workflows.
 
-The server side (Marketing Pool's backend runtime, an agent such as BrowserAgent, or a worker) is responsible for running them, usually on a different machine with a different Python setup.
+The server side (Marketing Pool's backend runtime, an agent such as Ethgent, or a worker) is responsible for running them, usually on a different machine with a different Python setup.
 
 MarketingAssets is an open pool of reusable capabilities people can draw on. It is a source, not a requirement.
 
@@ -171,7 +171,7 @@ Our architecture must support today's deterministic workflows without limiting t
 
 **MarketingAssets is an open pool where capabilities are shared.**
 
-**BrowserAgent is where intelligent reasoning and agent execution enter the system.**
+**Ethgent is where intelligent reasoning and agent execution enter the system.**
 
 **Marketing Pool is the infrastructure that runs what the Studio exports.**
 
